@@ -285,6 +285,17 @@ def build_dataset(cache_dir, force_refetch=False):
         with open(cache_path) as f:
             return json.load(f)
 
+    # Fall back to the baseline template cache if available
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    baseline_cache = os.path.join(script_dir, "run_0", "data", "dataset.json")
+    if os.path.exists(baseline_cache) and not force_refetch:
+        print(f"Using baseline cache from {baseline_cache}")
+        os.makedirs(cache_dir, exist_ok=True)
+        import shutil
+        shutil.copy(baseline_cache, cache_path)
+        with open(cache_path) as f:
+            return json.load(f)
+
     os.makedirs(cache_dir, exist_ok=True)
     dataset = []
 
@@ -334,8 +345,15 @@ def run(out_dir, seed, model_name="evo2_7b", hidden_dims=(256, 128),
 
     # Extract Evo2 embeddings
     emb_cache = os.path.join(out_dir, "data", f"embeddings_{model_name}.npy")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    baseline_emb_cache = os.path.join(script_dir, "run_0", "data", f"embeddings_{model_name}.npy")
     if os.path.exists(emb_cache):
         print("Loading cached embeddings...")
+        embeddings = np.load(emb_cache)
+    elif os.path.exists(baseline_emb_cache):
+        print(f"Using baseline embeddings cache from {baseline_emb_cache}")
+        import shutil
+        shutil.copy(baseline_emb_cache, emb_cache)
         embeddings = np.load(emb_cache)
     else:
         print(f"Extracting Evo2 embeddings ({model_name})...")
