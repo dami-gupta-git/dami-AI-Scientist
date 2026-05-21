@@ -173,7 +173,12 @@ def do_idea(
         baseline_results = json.load(f)
     # Check if baseline_results is a dictionary before extracting means
     if isinstance(baseline_results, dict):
-        baseline_results = {k: v["means"] for k, v in baseline_results.items()}
+        if "means" in baseline_results:
+            # Flat structure: {means: {...}, stderrs: {...}}
+            baseline_results = baseline_results["means"]
+        else:
+            # Nested structure: {dataset: {means: {...}}}
+            baseline_results = {k: v["means"] for k, v in baseline_results.items() if isinstance(v, dict) and "means" in v}
     exp_file = osp.join(folder_name, "experiment.py")
     vis_file = osp.join(folder_name, "plot.py")
     notes = osp.join(folder_name, "notes.txt")
