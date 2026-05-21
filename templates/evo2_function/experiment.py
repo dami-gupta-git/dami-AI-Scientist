@@ -316,7 +316,7 @@ def build_dataset(cache_dir, force_refetch=False):
 
 
 def run(out_dir, seed, model_name="evo2_7b", hidden_dims=(256, 128),
-        dropout=0.2, lr=1e-3, epochs=30, batch_size=16, train_frac=0.8):
+        dropout=0.2, lr=1e-3, epochs=10, batch_size=16, train_frac=0.8):
     os.makedirs(out_dir, exist_ok=True)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -402,7 +402,7 @@ parser.add_argument("--out_dir", type=str, default="run_0")
 args = parser.parse_args()
 
 if __name__ == "__main__":
-    seeds = [0, 1, 2]
+    seeds = [0]
     all_results = {}
     final_infos_list = []
 
