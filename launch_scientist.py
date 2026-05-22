@@ -60,6 +60,11 @@ def parse_arguments():
         help="What format to use for writeup",
     )
     parser.add_argument(
+        "--no-writeup",
+        action="store_true",
+        help="Skip writeup and review steps entirely.",
+    )
+    parser.add_argument(
         "--parallel",
         type=int,
         default=0,
@@ -129,6 +134,7 @@ def worker(
         writeup,
         improvement,
         gpu_id,
+        no_writeup=False,
 ):
     os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
     print(f"Worker {gpu_id} started.")
@@ -146,6 +152,7 @@ def worker(
             writeup,
             improvement,
             log_file=True,
+            no_writeup=no_writeup,
         )
         print(f"Completed idea: {idea['Name']}, Success: {success}")
     print(f"Worker {gpu_id} finished.")
@@ -161,6 +168,7 @@ def do_idea(
         writeup,
         improvement,
         log_file=False,
+        no_writeup=False,
 ):
     ## CREATE PROJECT FOLDER
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -232,6 +240,10 @@ def do_idea(
         if not success:
             print(f"Experiments failed for idea {idea_name}")
             return False
+
+        if no_writeup:
+            print("Skipping writeup (--no-writeup)")
+            return True
 
         print_time()
         print(f"*Starting Writeup*")
@@ -337,7 +349,7 @@ if __name__ == "__main__":
     print(f"Using GPUs: {available_gpus}")
 
     # Check LaTeX dependencies before proceeding
-    if args.writeup == "latex" and not check_latex_dependencies():
+    if not args.no_writeup and args.writeup == "latex" and not check_latex_dependencies():
         sys.exit(1)
 
     # Create client
@@ -416,6 +428,7 @@ if __name__ == "__main__":
                     client_model,
                     args.writeup,
                     args.improvement,
+                    no_writeup=args.no_writeup,
                 )
                 print(f"Completed idea: {idea['Name']}, Success: {success}")
             except Exception as e:
