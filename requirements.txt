@@ -16,3 +16,6 @@ datasets
 tiktoken
 wandb
 tqdm
+fair-esm
+scikit-learn
+scipy
