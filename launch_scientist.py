@@ -60,6 +60,11 @@ def parse_arguments():
         help="What format to use for writeup",
     )
     parser.add_argument(
+        "--no-writeup",
+        action="store_true",
+        help="Skip writeup and review; write a markdown summary instead.",
+    )
+    parser.add_argument(
         "--parallel",
         type=int,
         default=0,
@@ -161,6 +166,7 @@ def do_idea(
         writeup,
         improvement,
         log_file=False,
+        no_writeup=False,
 ):
     ## CREATE PROJECT FOLDER
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -233,6 +239,30 @@ def do_idea(
             print(f"Experiments failed for idea {idea_name}")
             return False
 
+        if args.no_writeup:
+            # Write a lightweight markdown summary instead of full LaTeX paper
+            results_file = osp.join(folder_name, "run_1", "final_info.json")
+            if not osp.exists(results_file):
+                results_file = osp.join(folder_name, "run_0", "final_info.json")
+            results_summary = ""
+            if osp.exists(results_file):
+                with open(results_file) as f:
+                    res = json.load(f)
+                means = res.get("means", res)
+                results_summary = "\n".join(f"- **{k}**: {v:.4f}" if isinstance(v, float) else f"- **{k}**: {v}"
+                                            for k, v in means.items())
+            md_path = osp.join(folder_name, f"{idea['Name']}_findings.md")
+            with open(md_path, "w") as f:
+                f.write(f"# {idea['Title']}\n\n")
+                f.write(f"## Hypothesis\n\n{idea['Experiment']}\n\n")
+                f.write(f"## Results\n\n{results_summary}\n\n")
+                f.write(f"## Scores\n\n")
+                f.write(f"- Interestingness: {idea.get('Interestingness', 'N/A')}/10\n")
+                f.write(f"- Feasibility: {idea.get('Feasibility', 'N/A')}/10\n")
+                f.write(f"- Novelty: {idea.get('Novelty', 'N/A')}/10\n")
+            print(f"Wrote findings to {md_path}")
+            return True
+
         print_time()
         print(f"*Starting Writeup*")
         ## PERFORM WRITEUP
@@ -279,7 +309,6 @@ def do_idea(
                     num_reviews_ensemble=5,
                     temperature=0.1,
                 )
-                # Store the review in separate review.txt file
                 with open(osp.join(folder_name, "review.txt"), "w") as f:
                     f.write(json.dumps(review, indent=4))
             except Exception as e:
@@ -305,7 +334,6 @@ def do_idea(
                     num_reviews_ensemble=5,
                     temperature=0.1,
                 )
-                # Store the review in separate review.txt file
                 with open(osp.join(folder_name, "review_improved.txt"), "w") as f:
                     f.write(json.dumps(review))
             except Exception as e:
@@ -416,6 +444,7 @@ if __name__ == "__main__":
                     client_model,
                     args.writeup,
                     args.improvement,
+                    no_writeup=args.no_writeup,
                 )
                 print(f"Completed idea: {idea['Name']}, Success: {success}")
             except Exception as e:
