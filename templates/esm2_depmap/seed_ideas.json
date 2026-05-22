@@ -1,0 +1,10 @@
+[
+  {
+    "Name": "pathway_stratified_mantel",
+    "Title": "Is the ESM-2 / Essentiality Correlation Driven by Protein Family or Pathway Co-membership?",
+    "Experiment": "Using cached embeddings and essentiality distances from run_0, stratify gene pairs into three groups: (1) same KEGG pathway (fetch pathway membership via KEGG API for all 2000 genes), (2) same protein family (use Pfam domain overlap — genes sharing at least one Pfam domain), (3) neither. Compute mean ESM-2 cosine distance and mean essentiality correlation for each group. Run a partial Mantel test controlling for pathway co-membership: does the ESM-2 / essentiality correlation persist after removing the contribution of pathway co-membership? If yes, ESM-2 is capturing something beyond pathway labels. If no, the correlation is explained by pathway structure alone. Report mean distances per group and partial Mantel r with p-value.",
+    "Interestingness": 10,
+    "Feasibility": 8,
+    "Novelty": 9
+  }
+]
