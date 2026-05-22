@@ -1,10 +1,10 @@
 [
   {
-    "Name": "validation_baseline_comparison",
-    "Title": "Does Evo2 Generalise? Validating Functional Classification AUROC on Glycolysis vs T-cell Signaling",
-    "Experiment": "Run the baseline MLP classifier (frozen Evo2-7B layer blocks.28.mlp.l3, 256->128->1 MLP) on glycolysis vs T-cell signaling genes. Report AUROC, accuracy, F1. Compare directly to the DNA repair vs TSG result (0.78 AUROC). If AUROC is similarly high, it suggests Evo2 broadly encodes functional class information. If AUROC is lower, the DNA repair/TSG result may reflect something specific to those classes (e.g. cancer-related sequence features). Also compute raw cosine similarity between class centroids as a baseline — does the unsupervised geometry show more separation here than in the DNA repair/TSG case?",
-    "Interestingness": 9,
-    "Feasibility": 9,
+    "Name": "cross_contrast_auroc_validation",
+    "Title": "Does Evo2 Generalise? Cross-Contrast Validation of Functional Classification AUROC",
+    "Experiment": "Using the cached embeddings from run_0/data/embeddings_evo2_7b.npy (layer blocks.28.mlp.l3 only), train the baseline MLP classifier (256->128->1) on glycolysis vs T-cell signaling genes and report AUROC, accuracy, F1. Compare directly to the DNA repair vs TSG result (0.78 AUROC). Additionally: (1) run unsupervised analysis — k-means ARI, within/between class cosine distance ratio, silhouette score with permutation test — to test whether this contrast also lacks spontaneous geometric clustering. (2) Compare the unsupervised metrics between this contrast and DNA repair/TSG to see if either contrast shows more geometric structure. Output a summary JSON with all metrics and a bar chart comparing supervised AUROC and unsupervised silhouette across both contrasts.",
+    "Interestingness": 10,
+    "Feasibility": 10,
     "Novelty": 8
   }
 ]
