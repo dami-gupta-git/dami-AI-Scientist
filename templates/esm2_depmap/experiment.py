@@ -226,16 +226,11 @@ def run(out_dir, seed=0, n_genes=N_GENES, model_name=ESM2_MODEL, n_permutations=
     # --- Compute pairwise essentiality correlations ---
     print("Computing pairwise essentiality correlations...")
     ess_matrix = depmap_df[symbols].values  # shape: (cell_lines, n_genes)
-    # Drop genes with >50% NaN across cell lines, then drop remaining NaN rows
-    gene_nan_frac = np.mean(np.isnan(ess_matrix), axis=0)
-    valid_genes_mask = gene_nan_frac <= 0.5
-    ess_matrix = ess_matrix[:, valid_genes_mask]
-    symbols = [s for s, v in zip(symbols, valid_genes_mask) if v]
-    embeddings = embeddings[valid_genes_mask]
-    print(f"  Kept {valid_genes_mask.sum()} genes after dropping high-NaN genes")
-    valid_rows = ~np.any(np.isnan(ess_matrix), axis=1)
-    ess_matrix = ess_matrix[valid_rows]
-    print(f"  Using {valid_rows.sum()} cell lines (after NaN removal)")
+    # Impute NaNs with column means (gene-wise mean across cell lines)
+    col_means = np.nanmean(ess_matrix, axis=0)
+    nan_mask = np.isnan(ess_matrix)
+    ess_matrix = np.where(nan_mask, col_means[np.newaxis, :], ess_matrix)
+    print(f"  Using {ess_matrix.shape[0]} cell lines, {ess_matrix.shape[1]} genes (NaNs imputed with column means)")
 
     # --- Compute pairwise ESM-2 cosine distances ---
     print("Computing pairwise ESM-2 cosine distances...")
