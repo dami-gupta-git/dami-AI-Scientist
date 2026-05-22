@@ -267,7 +267,7 @@ def run(out_dir, seed=0, n_genes=N_GENES, model_name=ESM2_MODEL, n_permutations=
         "mantel_r": r_obs,
         "mantel_p_value": p_value,
         "n_genes": len(symbols),
-        "n_cell_lines": int(valid_rows.sum()),
+        "n_cell_lines": int(ess_matrix.shape[0]),
         "embedding_dim": int(embeddings.shape[1]),
         "mean_esm2_dist": float(np.mean(esm2_dists_flat)),
         "mean_ess_correlation": float(np.mean(1 - ess_dists_flat)),
