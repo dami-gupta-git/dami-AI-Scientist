@@ -223,19 +223,25 @@ def run(out_dir, seed=0, n_genes=N_GENES, model_name=ESM2_MODEL, n_permutations=
         np.save(emb_cache, embeddings)
     print(f"Embeddings shape: {embeddings.shape}")
 
+    # --- Compute pairwise essentiality correlations ---
+    print("Computing pairwise essentiality correlations...")
+    ess_matrix = depmap_df[symbols].values  # shape: (cell_lines, n_genes)
+    # Drop genes with >50% NaN across cell lines, then drop remaining NaN rows
+    gene_nan_frac = np.mean(np.isnan(ess_matrix), axis=0)
+    valid_genes_mask = gene_nan_frac <= 0.5
+    ess_matrix = ess_matrix[:, valid_genes_mask]
+    symbols = [s for s, v in zip(symbols, valid_genes_mask) if v]
+    embeddings = embeddings[valid_genes_mask]
+    print(f"  Kept {valid_genes_mask.sum()} genes after dropping high-NaN genes")
+    valid_rows = ~np.any(np.isnan(ess_matrix), axis=1)
+    ess_matrix = ess_matrix[valid_rows]
+    print(f"  Using {valid_rows.sum()} cell lines (after NaN removal)")
+
     # --- Compute pairwise ESM-2 cosine distances ---
     print("Computing pairwise ESM-2 cosine distances...")
     from scipy.spatial.distance import pdist, squareform
     emb_norm = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
     esm2_dist = squareform(pdist(emb_norm, metric="cosine"))
-
-    # --- Compute pairwise essentiality correlations ---
-    print("Computing pairwise essentiality correlations...")
-    ess_matrix = depmap_df[symbols].values  # shape: (cell_lines, n_genes)
-    # Remove cell lines with NaN for any of our genes
-    valid_rows = ~np.any(np.isnan(ess_matrix), axis=1)
-    ess_matrix = ess_matrix[valid_rows]
-    print(f"  Using {valid_rows.sum()} cell lines (after NaN removal)")
 
     # Pearson correlation between essentiality profiles
     from numpy.linalg import norm
