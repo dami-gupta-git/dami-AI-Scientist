@@ -1,0 +1,1 @@
+{"final_train_loss": 1.9773112196006521, "final_val_accuracy": 0.7105263157894737, "final_val_auroc": 0.4928571428571429, "final_val_f1": 0.8307692307692308, "best_val_auroc": 0.6178571428571429, "best_val_accuracy": 0.7894736842105263, "n_train": 151, "n_test": 38, "n_glycolysis": 67, "n_tcell": 122, "input_dim": 4096}

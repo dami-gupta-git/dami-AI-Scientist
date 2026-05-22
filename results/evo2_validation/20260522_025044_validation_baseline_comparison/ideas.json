@@ -1,0 +1,10 @@
+[
+    {
+        "Name": "validation_baseline_comparison",
+        "Title": "Does Evo2 Generalise? Validating Functional Classification AUROC on Glycolysis vs T-cell Signaling",
+        "Experiment": "Run the baseline MLP classifier (frozen Evo2-7B layer blocks.28.mlp.l3, 256->128->1 MLP) on glycolysis vs T-cell signaling genes. Report AUROC, accuracy, F1. Compare directly to the DNA repair vs TSG result (0.78 AUROC). If AUROC is similarly high, it suggests Evo2 broadly encodes functional class information. If AUROC is lower, the DNA repair/TSG result may reflect something specific to those classes (e.g. cancer-related sequence features). Also compute raw cosine similarity between class centroids as a baseline \u2014 does the unsupervised geometry show more separation here than in the DNA repair/TSG case?",
+        "Interestingness": 9,
+        "Feasibility": 9,
+        "Novelty": 8
+    }
+]

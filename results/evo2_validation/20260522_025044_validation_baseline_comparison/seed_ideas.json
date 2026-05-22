@@ -1,0 +1,10 @@
+[
+  {
+    "Name": "cross_contrast_auroc_validation",
+    "Title": "Does Evo2 Generalise? Cross-Contrast Validation of Functional Classification AUROC",
+    "Experiment": "Using the cached embeddings from run_0/data/embeddings_evo2_7b.npy (layer blocks.28.mlp.l3 only), train the baseline MLP classifier (256->128->1) on glycolysis vs T-cell signaling genes and report AUROC, accuracy, F1. Compare directly to the DNA repair vs TSG result (0.78 AUROC). Additionally: (1) run unsupervised analysis — k-means ARI, within/between class cosine distance ratio, silhouette score with permutation test — to test whether this contrast also lacks spontaneous geometric clustering. (2) Compare the unsupervised metrics between this contrast and DNA repair/TSG to see if either contrast shows more geometric structure. Output a summary JSON with all metrics and a bar chart comparing supervised AUROC and unsupervised silhouette across both contrasts.",
+    "Interestingness": 10,
+    "Feasibility": 10,
+    "Novelty": 8
+  }
+]

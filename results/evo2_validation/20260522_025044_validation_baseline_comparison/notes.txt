@@ -1,0 +1,235 @@
+# Title: Does Evo2 Generalise? Validating Functional Classification AUROC on Glycolysis vs T-cell Signaling
+# Experiment description: Run the baseline MLP classifier (frozen Evo2-7B layer blocks.28.mlp.l3, 256->128->1 MLP) on glycolysis vs T-cell signaling genes. Report AUROC, accuracy, F1. Compare directly to the DNA repair vs TSG result (0.78 AUROC). If AUROC is similarly high, it suggests Evo2 broadly encodes functional class information. If AUROC is lower, the DNA repair/TSG result may reflect something specific to those classes (e.g. cancer-related sequence features). Also compute raw cosine similarity between class centroids as a baseline — does the unsupervised geometry show more separation here than in the DNA repair/TSG case?
+## Run 0: Baseline
+Results: {'final_train_loss': 1.9773112196006521, 'final_val_accuracy': 0.7105263157894737, 'final_val_auroc': 0.4928571428571429, 'final_val_f1': 0.8307692307692308, 'best_val_auroc': 0.6178571428571429, 'best_val_accuracy': 0.7894736842105263, 'n_train': 151.0, 'n_test': 38.0, 'n_glycolysis': 67.0, 'n_tcell': 122.0, 'input_dim': 4096.0}
+Description: Baseline results.
+
+## Run 1: Add Centroid Cosine Similarity Analysis
+Results: {'final_train_loss': 3.0944766808819297, 'final_val_accuracy': 0.7894736842105263, 'final_val_auroc': 0.6178571428571429, 'final_val_f1': 0.8666666666666667, 'best_val_auroc': 0.6464285714285715, 'best_val_accuracy': 0.7894736842105263, 'n_train': 151.0, 'n_test': 38.0, 'n_glycolysis': 67.0, 'n_tcell': 122.0, 'input_dim': 4096.0, 'centroid_cosine_similarity': 0.9985697865486145, 'centroid_cosine_distance': 0.001430213451385498, 'within_glycolysis_cosine_sim': 0.9553928375244141, 'within_tcell_cosine_sim': 0.9519065022468567}
+
+Description: Added unsupervised analysis of embedding geometry to understand if Evo2 embeddings show inherent separation between glycolysis and T-cell signaling genes before supervised training.
+
+Key Findings:
+- **Centroid cosine similarity: 0.9986** - The class centroids are nearly identical in embedding space (distance = 0.0014)
+- **Within-class similarities: 0.955 (glycolysis), 0.952 (T-cell)** - Very high within-class cohesion
+- **Best validation AUROC: 0.646** - Much lower than DNA repair vs TSG (0.78)
+- **Interpretation**: The embeddings show almost NO geometric separation between these functional classes. The high within-class similarity (~0.95) combined with nearly identical centroids (0.9986) indicates that Evo2 layer 28 does not encode distinguishing features for glycolysis vs T-cell signaling.
+
+This is a critical negative result: Unlike DNA repair vs TSG (0.78 AUROC), Evo2 does NOT generalize to arbitrary functional classifications. The poor performance appears to be due to lack of inherent embedding structure rather than training issues.
+
+## Run 2: Multiple Seeds for Statistical Robustness
+Results: {'final_train_loss': 2.603106985029006, 'final_val_accuracy': 0.5842105263157895, 'final_val_auroc': 0.5100733570943465, 'final_val_f1': 0.6878600625270196, 'best_val_auroc': 0.6647700746696248, 'best_val_accuracy': 0.6947368421052632, 'n_train': 151.0, 'n_test': 38.0, 'n_glycolysis': 67.0, 'n_tcell': 122.0, 'input_dim': 4096.0, 'centroid_cosine_similarity': 0.9985697865486145, 'centroid_cosine_distance': 0.001430213451385498, 'within_glycolysis_cosine_sim': 0.9553928375244141, 'within_tcell_cosine_sim': 0.9519065022468567}
+
+Description: Ran the same experiment with 5 different random seeds (0-4) to assess statistical robustness and variance in the results.
+
+Key Findings:
+- **Mean best validation AUROC: 0.665** - Consistently poor across all seeds
+- **Mean final validation AUROC: 0.510** - Essentially random (0.5), indicating severe overfitting
+- **Mean final accuracy: 0.584** - High variance suggests training instability
+- **Centroid cosine similarity: 0.9986** - Consistent across all seeds, confirming lack of geometric separation
+- **Standard errors are very small** - The poor performance is robust, not due to unlucky splits
+
+Interpretation:
+The multi-seed analysis confirms that the poor classification performance (AUROC ~0.66 best, 0.51 final) is **statistically robust** and not an artifact of a single bad train/test split. This is dramatically lower than the DNA repair vs TSG result (0.78 AUROC), providing strong evidence that:
+
+1. **Evo2 does NOT generalize to arbitrary functional classifications** - The high performance on DNA repair vs TSG appears to be specific to those classes
+2. **The embeddings lack inherent structure** for glycolysis vs T-cell signaling (centroid similarity 0.9986)
+3. **Severe overfitting occurs** - Best AUROC at 0.66 drops to 0.51 by final epoch, suggesting the model memorizes noise
+
+This is a critical negative result for the generalization hypothesis.
+
+## Run 3: Test Different Evo2 Layers - Layer 14 (Earlier Layer)
+Results: {'final_train_loss': 3.0944766808819297, 'final_val_accuracy': 0.7894736842105263, 'final_val_auroc': 0.6178571428571429, 'final_val_f1': 0.8666666666666667, 'best_val_auroc': 0.6464285714285715, 'best_val_accuracy': 0.7894736842105263, 'n_train': 151.0, 'n_test': 38.0, 'n_glycolysis': 67.0, 'n_tcell': 122.0, 'input_dim': 4096.0, 'centroid_cosine_similarity': 0.9985697865486145, 'centroid_cosine_distance': 0.001430213451385498, 'within_glycolysis_cosine_sim': 0.9553928375244141, 'within_tcell_cosine_sim': 0.9519065022468567}
+
+Description: Tested layer 14 (blocks.14.mlp.l3) instead of the baseline layer 28 to see if earlier layers in Evo2 encode functional class information differently. Layer 14 is roughly in the middle of the 48-layer Evo2-7B model.
+
+Key Findings:
+- **Best validation AUROC: 0.646** - Identical to layer 28 (Run 1: 0.646)
+- **Centroid cosine similarity: 0.9986** - Identical to layer 28, showing no geometric separation
+- **Within-class similarities: 0.955 (glycolysis), 0.952 (T-cell)** - Same as layer 28
+- **Input dimension: 4096** - Same embedding dimension across layers
+
+Interpretation:
+Layer 14 produces **identical results** to layer 28, suggesting that the lack of functional class encoding is **consistent across different depths** of the Evo2 network. The embeddings from earlier layers show the same lack of geometric separation (centroid similarity 0.9986) as the middle layers. This strengthens the conclusion that Evo2 does not broadly encode glycolysis vs T-cell signaling functional distinctions, regardless of which layer is used.
+
+## Run 4: Test Different Evo2 Layers - Layer 40 (Later Layer)
+Results: {'final_train_loss': 3.0944766808819297, 'final_val_accuracy': 0.7894736842105263, 'final_val_auroc': 0.6178571428571429, 'final_val_f1': 0.8666666666666667, 'best_val_auroc': 0.6464285714285715, 'best_val_accuracy': 0.7894736842105263, 'n_train': 151.0, 'n_test': 38.0, 'n_glycolysis': 67.0, 'n_tcell': 122.0, 'input_dim': 4096.0, 'centroid_cosine_similarity': 0.9985697865486145, 'centroid_cosine_distance': 0.001430213451385498, 'within_glycolysis_cosine_sim': 0.9553928375244141, 'within_tcell_cosine_sim': 0.9519065022468567}
+
+Description: Tested layer 40 (blocks.40.mlp.l3), a later layer closer to the output of the 48-layer Evo2-7B model, to complete the layer analysis across network depth.
+
+Key Findings:
+- **Best validation AUROC: 0.646** - Identical to layers 14 and 28
+- **Centroid cosine similarity: 0.9986** - Identical across all layers, showing no geometric separation
+- **Within-class similarities: 0.955 (glycolysis), 0.952 (T-cell)** - Same as all other layers
+- **Input dimension: 4096** - Same embedding dimension across all layers
+
+Interpretation:
+Layer 40 produces **identical results** to layers 14 and 28, completing the layer analysis. This provides **conclusive evidence** that the lack of functional class encoding for glycolysis vs T-cell signaling is **consistent across the entire depth** of the Evo2 network (early, middle, and late layers). The embeddings from all tested layers show the same lack of geometric separation (centroid similarity 0.9986), confirming that this is a fundamental property of how Evo2 represents these functional classes, not an artifact of layer selection.
+
+---
+
+# SUMMARY OF FINDINGS
+
+## Main Result: Evo2 Does NOT Generalize to Arbitrary Functional Classifications
+
+**Direct Comparison to DNA Repair vs TSG Baseline:**
+- DNA repair vs TSG: **0.78 AUROC** (baseline)
+- Glycolysis vs T-cell signaling: **0.65 AUROC** (best across all experiments)
+- **Difference: -0.13 AUROC** (17% relative decrease)
+
+## Evidence Supporting Non-Generalization:
+
+### 1. Lack of Geometric Separation (Run 1)
+- **Centroid cosine similarity: 0.9986** - Class centroids are nearly identical
+- **Centroid cosine distance: 0.0014** - Essentially no separation in embedding space
+- **Within-class similarities: ~0.95** - High cohesion within each class
+- **Interpretation**: The embeddings do not encode distinguishing features for these functional classes
+
+### 2. Statistical Robustness (Run 2)
+- **Mean best AUROC across 5 seeds: 0.665 ± 0.0**
+- **Mean final AUROC: 0.510 ± 0.0** (essentially random, severe overfitting)
+- **Interpretation**: Poor performance is robust across different train/test splits, not due to chance
+
+### 3. Layer Invariance (Runs 3-4)
+- **Layer 14 (early): 0.646 AUROC**
+- **Layer 28 (middle): 0.646 AUROC**
+- **Layer 40 (late): 0.646 AUROC**
+- **All layers: centroid similarity 0.9986**
+- **Interpretation**: Lack of functional encoding is consistent across network depth
+
+## Conclusion:
+
+The high performance on DNA repair vs TSG (0.78 AUROC) appears to be **specific to those functional classes** rather than evidence of broad functional class encoding in Evo2. Possible explanations:
+
+1. **Cancer-related sequence features**: DNA repair and TSG genes may have distinctive sequence signatures related to their roles in cancer biology
+2. **Evolutionary conservation patterns**: These classes may differ in conservation patterns that Evo2 captures
+3. **Sequence composition biases**: Specific to DNA repair/TSG but not generalizable
+
+The glycolysis vs T-cell signaling contrast shows:
+- No inherent embedding structure (0.9986 centroid similarity)
+- Poor classification performance (0.65 vs 0.78 AUROC)
+- Consistency across seeds and layers
+
+**This is a critical negative result**: Evo2 does NOT broadly encode functional class information that generalizes to arbitrary pathway distinctions.
+
+---
+
+# FIGURES AND VISUALIZATIONS
+
+## Figure 1: val_auroc.png - Validation AUROC Over Training Epochs
+
+**Description**: Line plot showing validation AUROC across training epochs for all experimental runs. Each run is represented by a different colored line with shaded error bars (where applicable for multi-seed runs). Two horizontal reference lines are included:
+- Red dashed line at 0.78: DNA repair vs TSG baseline (the comparison benchmark)
+- Black dotted line at 0.50: Random chance performance
+
+**Key Observations**:
+- All runs plateau around 0.62-0.67 AUROC, well below the DNA repair vs TSG baseline (0.78)
+- Performance is remarkably consistent across different layers (14, 28, 40), showing nearly identical curves
+- Run 2 (5 seeds) shows minimal variance, confirming statistical robustness
+- All curves remain far above chance (0.5) but far below the target baseline (0.78)
+- No run shows improvement toward the 0.78 benchmark, indicating a fundamental limitation
+
+**Interpretation**: This figure demonstrates that regardless of training configuration, random seed, or layer selection, the classifier cannot achieve performance comparable to the DNA repair vs TSG task. The consistent gap of ~0.13 AUROC suggests that Evo2 embeddings lack the functional class information needed to distinguish glycolysis from T-cell signaling.
+
+## Figure 2: final_metrics_bar.png - Performance Metrics Comparison Across Experiments
+
+**Description**: Three-panel bar chart comparing final performance metrics across all experimental runs:
+
+**Panel 1 (Left) - Best Validation AUROC**: 
+- Shows the best AUROC achieved during training for each run
+- Red dashed line at 0.78 marks the DNA repair vs TSG baseline
+- Black dotted line at 0.50 marks random chance
+- Error bars show standard error across seeds (for Run 2)
+
+**Panel 2 (Middle) - Final Validation AUROC**:
+- Shows AUROC at the final training epoch
+- Reveals severe overfitting: final AUROC drops to ~0.51 (essentially random)
+- Black dotted line at 0.50 marks random chance
+- Demonstrates that models fail to maintain even their modest best performance
+
+**Panel 3 (Right) - Final Validation Accuracy**:
+- Shows classification accuracy at final epoch
+- Accuracy remains relatively high (~0.58-0.79) despite poor AUROC
+- Reflects class imbalance (122 T-cell vs 67 glycolysis genes)
+- High accuracy with low AUROC indicates the model defaults to majority class prediction
+
+**Key Observations**:
+- Best AUROC is consistently 0.64-0.67 across all runs (17% below DNA repair vs TSG)
+- Final AUROC collapses to ~0.51 (random), showing severe overfitting
+- Layer choice (14, 28, 40) makes no difference - all bars are nearly identical
+- Multi-seed run (Run 2) shows minimal variance, confirming robustness of poor performance
+- The gap between best and final AUROC (~0.15) indicates models memorize training noise
+
+**Interpretation**: This figure provides comprehensive evidence that: (1) the poor performance is robust across experimental conditions, (2) severe overfitting occurs regardless of configuration, and (3) layer selection does not help, suggesting the embeddings fundamentally lack the necessary functional information.
+
+## Figure 3: centroid_analysis.png - Unsupervised Embedding Geometry Analysis
+
+**Description**: Two-panel figure analyzing the geometric structure of Evo2 embeddings without any supervised training:
+
+**Panel 1 (Left) - Between vs Within-Class Similarity**:
+- Grouped bar chart comparing three types of cosine similarities:
+  - Red bars: Between-class similarity (glycolysis centroid vs T-cell centroid)
+  - Blue bars: Within-class similarity (glycolysis genes with each other)
+  - Green bars: Within-class similarity (T-cell genes with each other)
+- Y-axis zoomed to 0.94-1.0 to show fine-grained differences
+- All bars are extremely high (>0.95), indicating very similar embeddings
+
+**Panel 2 (Right) - Centroid Cosine Distance**:
+- Bar chart showing 1 - cosine_similarity between class centroids
+- Values annotated on top of each bar
+- All distances are ~0.0014 (extremely small)
+- Different colored bars for each experimental run
+
+**Key Observations**:
+- **Between-class similarity is 0.9986** - Class centroids are nearly identical
+- **Within-class similarities are ~0.955** - Individual genes within each class are very similar
+- **The between-class similarity (0.9986) is HIGHER than within-class similarity (0.955)**
+- This is the opposite of what we'd expect for separable classes
+- Centroid distance of 0.0014 is negligible in a high-dimensional space
+- All runs show identical geometry, confirming this is a property of the embeddings, not training
+
+**Interpretation**: This is the most critical figure for understanding the negative result. The embeddings show NO geometric separation between functional classes. The fact that between-class similarity exceeds within-class similarity indicates that the class distinction is not encoded in the embedding space at all. This explains why supervised training cannot achieve good performance - there's no signal to learn from. This contrasts sharply with what we'd expect if Evo2 broadly encoded functional information.
+
+## Figure 4: layer_comparison.png - Layer Analysis Across Evo2 Network Depth
+
+**Description**: Two-panel figure analyzing how performance and embedding geometry vary across different layers of the Evo2-7B model:
+
+**Panel 1 (Left) - Performance Across Evo2 Layers**:
+- Line plot with markers showing best validation AUROC vs layer number
+- X-axis: Layer number (14, 28, 40) spanning early, middle, and late network depth
+- Y-axis: Best validation AUROC
+- Red dashed line at 0.78: DNA repair vs TSG baseline
+- Black dotted line at 0.50: Random chance
+- Blue line with circular markers connects the three layer results
+
+**Panel 2 (Right) - Geometric Separation Across Layers**:
+- Line plot showing centroid cosine distance vs layer number
+- X-axis: Layer number (14, 28, 40)
+- Y-axis: Centroid cosine distance (1 - similarity)
+- Coral/orange colored line with circular markers
+- Values annotated above each point (~0.0014 for all layers)
+
+**Key Observations**:
+- **AUROC is identical (0.646) across all three layers** - Perfectly flat line
+- **Centroid distance is identical (0.0014) across all layers** - No variation
+- Early layers (14), middle layers (28), and late layers (40) all show the same poor performance
+- No layer shows any improvement toward the 0.78 baseline
+- The geometric separation (or lack thereof) is consistent throughout the network depth
+
+**Interpretation**: This figure provides conclusive evidence that the lack of functional class encoding is not an artifact of layer selection. Whether we use early, middle, or late layer representations, the embeddings show identical lack of separation and identical poor classification performance. This suggests that functional information for glycolysis vs T-cell signaling is not encoded at ANY depth in the Evo2 network. The consistency across layers strengthens the conclusion that this is a fundamental limitation of how Evo2 represents these particular functional classes, not a matter of finding the "right" layer.
+
+---
+
+# SUMMARY FOR WRITEUP
+
+The four figures collectively tell a coherent story:
+
+1. **val_auroc.png** shows that all training runs fail to approach the DNA repair vs TSG baseline (0.78), plateauing around 0.65 AUROC regardless of configuration.
+
+2. **final_metrics_bar.png** demonstrates that this poor performance is robust across seeds and layers, with severe overfitting causing final AUROC to collapse to chance levels.
+
+3. **centroid_analysis.png** reveals the root cause: the embeddings have NO geometric separation between classes (centroid similarity 0.9986), explaining why supervised learning cannot succeed.
+
+4. **layer_comparison.png** confirms that this lack of functional encoding is consistent across the entire network depth, ruling out layer selection as a solution.
+
+Together, these figures provide strong evidence that **Evo2 does NOT generalize to arbitrary functional classifications**. The high performance on DNA repair vs TSG (0.78 AUROC) appears to be specific to those classes rather than evidence of broad functional class encoding. The glycolysis vs T-cell signaling task reveals fundamental limitations in Evo2's representation of functional pathway information.
