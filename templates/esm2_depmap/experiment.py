@@ -140,27 +140,38 @@ def get_esm2_embeddings(sequences, model_name=ESM2_MODEL, device="cuda", batch_s
 # Mantel test
 # ---------------------------------------------------------------------------
 
+def _pearsonr_vec(a, b):
+    """Fast Pearson r between two 1-D arrays."""
+    a = a - a.mean()
+    b = b - b.mean()
+    denom = np.sqrt((a * a).sum() * (b * b).sum())
+    if denom == 0:
+        return float("nan")
+    return float((a * b).sum() / denom)
+
+
 def mantel_test(dist_matrix_1, dist_matrix_2, n_permutations=1000, seed=0):
     """
     Mantel test: correlation between two distance matrices.
+    Uses rank-transformed Pearson (= Spearman) via pre-ranked vectors for speed.
     Returns (r, p_value, null_distribution).
     """
-    from scipy.stats import pearsonr, spearmanr
+    from scipy.stats import rankdata
     rng = np.random.RandomState(seed)
     n = dist_matrix_1.shape[0]
     idx = np.triu_indices(n, k=1)
-    v1 = dist_matrix_1[idx]
-    v2 = dist_matrix_2[idx]
+    v1 = rankdata(dist_matrix_1[idx]).astype(np.float64)
+    v2_full = dist_matrix_2[idx]
+    v2 = rankdata(v2_full).astype(np.float64)
 
-    r_obs, _ = spearmanr(v1, v2)
+    r_obs = _pearsonr_vec(v1, v2)
 
     null = []
     perm_idx = np.arange(n)
     for _ in range(n_permutations):
         rng.shuffle(perm_idx)
-        v2_perm = dist_matrix_2[np.ix_(perm_idx, perm_idx)][idx]
-        r_perm, _ = spearmanr(v1, v2_perm)
-        null.append(r_perm)
+        v2_perm = rankdata(dist_matrix_2[np.ix_(perm_idx, perm_idx)][idx]).astype(np.float64)
+        null.append(_pearsonr_vec(v1, v2_perm))
 
     null = np.array(null)
     p_value = float(np.mean(np.abs(null) >= np.abs(r_obs)))
