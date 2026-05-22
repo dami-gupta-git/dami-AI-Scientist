@@ -32,13 +32,13 @@ DEPMAP_FILENAME = "CRISPRGeneEffect.csv"
 # ---------------------------------------------------------------------------
 
 def get_depmap_download_url(filename=DEPMAP_FILENAME):
+    import csv, io
     with urllib.request.urlopen(DEPMAP_URL, timeout=30) as resp:
         text = resp.read().decode()
-    for line in text.strip().split("\n"):
-        parts = line.split(",")
-        if len(parts) >= 3 and parts[2].strip() == filename and "26Q1" in parts[0]:
-            # URL is parts[3] but may contain commas — rejoin
-            return ",".join(parts[3:]).strip()
+    reader = csv.reader(io.StringIO(text))
+    for row in reader:
+        if len(row) >= 4 and row[2].strip() == filename and "26Q1" in row[0]:
+            return row[3].strip()
     raise ValueError(f"{filename} not found in DepMap 26Q1 release")
 
 
