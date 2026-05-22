@@ -3,6 +3,7 @@ Regenerate dendrogram colored by sub-pathway (MMR/NER/HR/BER/TSG).
 Run from: results/evo2_function/
 """
 import json
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -12,8 +13,9 @@ import urllib.request
 import time
 
 # Paths — adjust if running from elsewhere
-EMBEDDINGS = "../../templates/evo2_function/run_0/data/embeddings_evo2_7b.npy"
-DATASET    = "../../templates/evo2_function/run_0/data/dataset.json"
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EMBEDDINGS = os.path.join(_root, "templates/evo2_function/run_0/data/embeddings_evo2_7b.npy")
+DATASET    = os.path.join(_root, "templates/evo2_function/run_0/data/dataset.json")
 
 PATHWAY_IDS = {
     "MMR": "hsa03430",
