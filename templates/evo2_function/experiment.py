@@ -326,6 +326,62 @@ def build_dataset(cache_dir, force_refetch=False):
     return dataset
 
 
+def run_supervised_probes(embeddings, labels, train_idx, test_idx, seed):
+    """Train LR, SVM, and MLP probes; return metrics for all three."""
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.svm import SVC
+    from sklearn.model_selection import StratifiedKFold, cross_val_score
+    from sklearn.metrics import roc_auc_score, f1_score, accuracy_score
+    from sklearn.preprocessing import StandardScaler
+
+    X_train_np = embeddings[train_idx]
+    X_test_np = embeddings[test_idx]
+    y_train_np = labels[train_idx]
+    y_test_np = labels[test_idx]
+
+    scaler = StandardScaler()
+    X_train_sc = scaler.fit_transform(X_train_np)
+    X_test_sc = scaler.transform(X_test_np)
+
+    results = {}
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+
+    # Logistic Regression
+    print("  Training Logistic Regression...")
+    lr = LogisticRegression(penalty="l2", C=1.0, max_iter=1000, random_state=seed)
+    lr_cv_scores = cross_val_score(lr, X_train_sc, y_train_np, cv=cv, scoring="roc_auc")
+    lr.fit(X_train_sc, y_train_np)
+    lr_probs = lr.predict_proba(X_test_sc)[:, 1]
+    lr_preds = lr.predict(X_test_sc)
+    results["lr"] = {
+        "auroc": float(roc_auc_score(y_test_np, lr_probs)),
+        "accuracy": float(accuracy_score(y_test_np, lr_preds)),
+        "f1": float(f1_score(y_test_np, lr_preds, zero_division=0)),
+        "cv_auroc_mean": float(lr_cv_scores.mean()),
+        "cv_auroc_std": float(lr_cv_scores.std()),
+    }
+    print(f"    LR AUROC: {results['lr']['auroc']:.3f} | CV: {results['lr']['cv_auroc_mean']:.3f} ± {results['lr']['cv_auroc_std']:.3f}")
+
+    # SVM (RBF)
+    print("  Training SVM (RBF)...")
+    svm = SVC(kernel="rbf", C=1.0, gamma="scale", probability=True, random_state=seed)
+    svm_cv_scores = cross_val_score(svm, X_train_sc, y_train_np, cv=cv, scoring="roc_auc")
+    svm.fit(X_train_sc, y_train_np)
+    svm_probs = svm.predict_proba(X_test_sc)[:, 1]
+    svm_preds = svm.predict(X_test_sc)
+    results["svm"] = {
+        "auroc": float(roc_auc_score(y_test_np, svm_probs)),
+        "accuracy": float(accuracy_score(y_test_np, svm_preds)),
+        "f1": float(f1_score(y_test_np, svm_preds, zero_division=0)),
+        "cv_auroc_mean": float(svm_cv_scores.mean()),
+        "cv_auroc_std": float(svm_cv_scores.std()),
+    }
+    print(f"    SVM AUROC: {results['svm']['auroc']:.3f} | CV: {results['svm']['cv_auroc_mean']:.3f} ± {results['svm']['cv_auroc_std']:.3f}")
+
+    results["nonlinearity_gap_mlp_lr"] = None  # filled in after MLP
+    return results, scaler
+
+
 def run(out_dir, seed, model_name="evo2_7b", hidden_dims=(256, 128),
         dropout=0.2, lr=1e-3, epochs=10, batch_size=16, train_frac=0.8):
     os.makedirs(out_dir, exist_ok=True)
@@ -366,12 +422,20 @@ def run(out_dir, seed, model_name="evo2_7b", hidden_dims=(256, 128),
     input_dim = embeddings.shape[1]
     print(f"Embedding shape: {embeddings.shape}")
 
-    # Train/test split
-    rng = np.random.RandomState(seed)
-    idx = rng.permutation(len(sequences))
-    n_train = int(len(sequences) * train_frac)
-    train_idx, test_idx = idx[:n_train], idx[n_train:]
+    # Train/test split (stratified)
+    from sklearn.model_selection import train_test_split
+    all_idx = np.arange(len(sequences))
+    train_idx, test_idx = train_test_split(
+        all_idx, test_size=1 - train_frac, stratify=labels, random_state=seed
+    )
+    n_train, n_test = len(train_idx), len(test_idx)
 
+    # --- Supervised probes: LR and SVM ---
+    print("Running supervised probes...")
+    probe_results, scaler = run_supervised_probes(embeddings, labels, train_idx, test_idx, seed)
+
+    # --- MLP ---
+    print("  Training MLP...")
     X_train = torch.tensor(embeddings[train_idx])
     y_train = torch.tensor(labels[train_idx])
     X_test = torch.tensor(embeddings[test_idx])
@@ -380,29 +444,47 @@ def run(out_dir, seed, model_name="evo2_7b", hidden_dims=(256, 128),
     train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(TensorDataset(X_test, y_test), batch_size=batch_size)
 
-    model = MLP(input_dim, list(hidden_dims), dropout).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    mlp_model = MLP(input_dim, list(hidden_dims), dropout).to(device)
+    optimizer = torch.optim.Adam(mlp_model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     train_log, val_log = [], []
     for epoch in range(1, epochs + 1):
-        train_loss = train_epoch(model, train_loader, optimizer, device)
-        val_metrics = evaluate(model, test_loader, device)
+        train_loss = train_epoch(mlp_model, train_loader, optimizer, device)
+        val_metrics = evaluate(mlp_model, test_loader, device)
         scheduler.step()
         train_log.append({"epoch": epoch, "train_loss": train_loss})
         val_log.append({"epoch": epoch, **val_metrics})
         if epoch % 5 == 0:
             print(f"  epoch {epoch}: loss={train_loss:.4f} acc={val_metrics['accuracy']:.3f} auroc={val_metrics['auroc']:.3f} f1={val_metrics['f1']:.3f}")
 
+    mlp_auroc = float(max(v["auroc"] for v in val_log))
+    probe_results["nonlinearity_gap_mlp_lr"] = mlp_auroc - probe_results["lr"]["auroc"]
+
     final_info = {
+        # MLP metrics
         "final_train_loss": train_log[-1]["train_loss"],
         "final_val_accuracy": val_log[-1]["accuracy"],
         "final_val_auroc": val_log[-1]["auroc"],
         "final_val_f1": val_log[-1]["f1"],
-        "best_val_auroc": float(max(v["auroc"] for v in val_log)),
+        "best_val_auroc": mlp_auroc,
         "best_val_accuracy": float(max(v["accuracy"] for v in val_log)),
+        # LR metrics
+        "lr_auroc": probe_results["lr"]["auroc"],
+        "lr_accuracy": probe_results["lr"]["accuracy"],
+        "lr_f1": probe_results["lr"]["f1"],
+        "lr_cv_auroc_mean": probe_results["lr"]["cv_auroc_mean"],
+        "lr_cv_auroc_std": probe_results["lr"]["cv_auroc_std"],
+        # SVM metrics
+        "svm_auroc": probe_results["svm"]["auroc"],
+        "svm_accuracy": probe_results["svm"]["accuracy"],
+        "svm_f1": probe_results["svm"]["f1"],
+        "svm_cv_auroc_mean": probe_results["svm"]["cv_auroc_mean"],
+        "svm_cv_auroc_std": probe_results["svm"]["cv_auroc_std"],
+        # Summary
+        "nonlinearity_gap_mlp_lr": probe_results["nonlinearity_gap_mlp_lr"],
         "n_train": int(n_train),
-        "n_test": int(len(sequences) - n_train),
+        "n_test": int(n_test),
         "n_dna_repair": int((labels == 0).sum()),
         "n_tsg": int((labels == 1).sum()),
         "input_dim": int(input_dim),

@@ -48,7 +48,7 @@ def parse_arguments():
     parser.add_argument(
         "--model",
         type=str,
-        default="claude-3-5-sonnet-20240620",
+        default="claude-sonnet-4-5",
         choices=AVAILABLE_LLMS,
         help="Model to use for AI Scientist.",
     )
@@ -63,6 +63,11 @@ def parse_arguments():
         "--no-writeup",
         action="store_true",
         help="Skip writeup and review steps entirely.",
+    )
+    parser.add_argument(
+        "--ideas-only",
+        action="store_true",
+        help="Generate ideas (and run novelty check unless skipped), save to ideas.json, then exit.",
     )
     parser.add_argument(
         "--parallel",
@@ -349,7 +354,7 @@ if __name__ == "__main__":
     print(f"Using GPUs: {available_gpus}")
 
     # Check LaTeX dependencies before proceeding
-    if not args.no_writeup and args.writeup == "latex" and not check_latex_dependencies():
+    if not args.ideas_only and not args.no_writeup and args.writeup == "latex" and not check_latex_dependencies():
         sys.exit(1)
 
     # Create client
@@ -376,6 +381,10 @@ if __name__ == "__main__":
 
     with open(osp.join(base_dir, "ideas.json"), "w") as f:
         json.dump(ideas, f, indent=4)
+
+    if args.ideas_only:
+        print(f"Ideas saved to {osp.join(base_dir, 'ideas.json')}. Exiting (--ideas-only).")
+        sys.exit(0)
 
     novel_ideas = [idea for idea in ideas if idea.get("novel", True)]
     # novel_ideas = list(reversed(novel_ideas))
