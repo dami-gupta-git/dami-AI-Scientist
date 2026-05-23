@@ -1,8 +1,8 @@
 [
   {
-    "Name": "supervised_probe_comparison",
-    "Title": "Linear vs Nonlinear Probes: What Supervised Classifiers Reveal About Functional Information in Evo2 Embeddings",
-    "Experiment": "Load cached embeddings from run_0/data/embeddings_evo2_7b.npy and labels from run_0/data/dataset.json. Train and compare three supervised probes on identical stratified train/test splits: (1) Logistic Regression (L2), (2) SVM (RBF kernel), (3) MLP (existing baseline). Report AUROC, accuracy, and F1 for each. Compute the nonlinearity gap (MLP AUROC - LR AUROC) to quantify how much nonlinear structure the embeddings contain. Perform 5-fold cross-validation for all models and report mean ± std AUROC. Generate a ROC curve plot comparing all three models.",
+    "Name": "xgboost_hyperparameter_tuning",
+    "Title": "Optimizing Tree-Based Nonlinearity: XGBoost Hyperparameter Search on Evo2 Embeddings",
+    "Experiment": "Load cached embeddings from run_0/data/embeddings_evo2_7b.npy and labels from run_0/data/dataset.json. Perform a grid search over XGBoost hyperparameters: n_estimators=[100,200,500], max_depth=[3,4,6], learning_rate=[0.01,0.05,0.1], subsample=[0.7,0.8,1.0]. Use 5-fold stratified CV with scale_pos_weight to handle class imbalance. Report best AUROC, best params, and a heatmap of AUROC vs max_depth × learning_rate. Compare best XGBoost to LR, SVM, and MLP baselines. Also extract XGBoost feature importances (gain-based) and plot top-30 embedding dimensions.",
     "Interestingness": 9,
     "Feasibility": 10,
     "Novelty": 8

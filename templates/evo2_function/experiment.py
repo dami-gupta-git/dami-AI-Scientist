@@ -378,6 +378,29 @@ def run_supervised_probes(embeddings, labels, train_idx, test_idx, seed):
     }
     print(f"    SVM AUROC: {results['svm']['auroc']:.3f} | CV: {results['svm']['cv_auroc_mean']:.3f} ± {results['svm']['cv_auroc_std']:.3f}")
 
+    # XGBoost
+    print("  Training XGBoost...")
+    from xgboost import XGBClassifier
+    scale_pos_weight = float((y_train_np == 0).sum()) / float((y_train_np == 1).sum())
+    xgb = XGBClassifier(
+        n_estimators=200, max_depth=4, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8,
+        scale_pos_weight=scale_pos_weight,
+        random_state=seed, eval_metric="logloss", verbosity=0,
+    )
+    xgb_cv_scores = cross_val_score(xgb, X_train_np, y_train_np, cv=cv, scoring="roc_auc")
+    xgb.fit(X_train_np, y_train_np)
+    xgb_probs = xgb.predict_proba(X_test_np)[:, 1]
+    xgb_preds = xgb.predict(X_test_np)
+    results["xgb"] = {
+        "auroc": float(roc_auc_score(y_test_np, xgb_probs)),
+        "accuracy": float(accuracy_score(y_test_np, xgb_preds)),
+        "f1": float(f1_score(y_test_np, xgb_preds, zero_division=0)),
+        "cv_auroc_mean": float(xgb_cv_scores.mean()),
+        "cv_auroc_std": float(xgb_cv_scores.std()),
+    }
+    print(f"    XGB AUROC: {results['xgb']['auroc']:.3f} | CV: {results['xgb']['cv_auroc_mean']:.3f} ± {results['xgb']['cv_auroc_std']:.3f}")
+
     results["nonlinearity_gap_mlp_lr"] = None  # filled in after MLP
     return results, scaler
 
@@ -481,7 +504,14 @@ def run(out_dir, seed, model_name="evo2_7b", hidden_dims=(256, 128),
         "svm_f1": probe_results["svm"]["f1"],
         "svm_cv_auroc_mean": probe_results["svm"]["cv_auroc_mean"],
         "svm_cv_auroc_std": probe_results["svm"]["cv_auroc_std"],
+        # XGBoost metrics
+        "xgb_auroc": probe_results["xgb"]["auroc"],
+        "xgb_accuracy": probe_results["xgb"]["accuracy"],
+        "xgb_f1": probe_results["xgb"]["f1"],
+        "xgb_cv_auroc_mean": probe_results["xgb"]["cv_auroc_mean"],
+        "xgb_cv_auroc_std": probe_results["xgb"]["cv_auroc_std"],
         # Summary
+        "nonlinearity_gap_xgb_lr": probe_results["xgb"]["auroc"] - probe_results["lr"]["auroc"],
         "nonlinearity_gap_mlp_lr": probe_results["nonlinearity_gap_mlp_lr"],
         "n_train": int(n_train),
         "n_test": int(n_test),
