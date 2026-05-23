@@ -348,7 +348,7 @@ def run_supervised_probes(embeddings, labels, train_idx, test_idx, seed):
 
     # Logistic Regression
     print("  Training Logistic Regression...")
-    lr = LogisticRegression(penalty="l2", C=1.0, max_iter=1000, random_state=seed)
+    lr = LogisticRegression(C=1.0, max_iter=1000, random_state=seed)
     lr_cv_scores = cross_val_score(lr, X_train_sc, y_train_np, cv=cv, scoring="roc_auc")
     lr.fit(X_train_sc, y_train_np)
     lr_probs = lr.predict_proba(X_test_sc)[:, 1]
