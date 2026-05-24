@@ -41,7 +41,7 @@ warnings.filterwarnings("ignore")
 # Constants
 # ---------------------------------------------------------------------------
 
-OSF_DATASET_URL = "https://osf.io/h62fq/download"  # Gerasimavicius et al. OSF archive
+OSF_DATASET_URL = "https://osf.io/rct6d/download"  # Gerasimavicius et al. DiseaseMech_Stability_VEPS.xlsx
 UNIPROT_REST = "https://rest.uniprot.org/uniprotkb"
 ESM2_MODEL_650M = "esm2_t33_650M_UR50D"
 ESM2_MODEL_3B = "esm2_t36_3B_UR50D"
@@ -63,8 +63,11 @@ BENIGN_LEAK_THRESHOLD = 0.50           # benign AUROC as fraction of pathogenic 
 def fetch_gerasimavicius_dataset(cache_dir):
     """
     Download and parse the Gerasimavicius et al. variant table from OSF.
+    File: DiseaseMech_Stability_VEPS.xlsx, sheet: HGMD_four_class
+    Columns used: Gene, Uniprot_id, Uniprot_variant, Gene_mechanism_label, raw_FoldX_Monomer
+    Uniprot_variant format: e.g. "H77Y" (wt_aa + position + mut_aa)
     Returns list of dicts with keys: gene, uniprot_id, aa_pos, aa_wt, aa_mut,
-    mechanism (GOF/DN/HI/AR), foldx_ddg, clinvar_id.
+    mechanism (GOF/DN/HI/AR), foldx_ddg.
     Falls back to a minimal synthetic dataset for testing if download fails.
     """
     cache_path = os.path.join(cache_dir, "gerasimavicius_variants.json")
@@ -76,93 +79,72 @@ def fetch_gerasimavicius_dataset(cache_dir):
     os.makedirs(cache_dir, exist_ok=True)
     print("Downloading Gerasimavicius et al. dataset from OSF...")
 
-    # Try to download the OSF archive
     variants = []
     try:
-        req = urllib.request.Request(
-            OSF_DATASET_URL,
-            headers={"User-Agent": "Mozilla/5.0"}
-        )
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
+        import io
+        import re
+        try:
+            import openpyxl
+        except ImportError:
+            import subprocess, sys
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "openpyxl"])
+            import openpyxl
 
-        # Parse CSV/TSV — OSF file is tab-separated with header
-        lines = raw.strip().split("\n")
-        if not lines:
-            raise ValueError("Empty download")
+        req = urllib.request.Request(OSF_DATASET_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            data = resp.read()
 
-        header = lines[0].strip().split("\t")
-        print(f"  OSF file header: {header[:10]}")
+        wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True)
+        ws = wb["HGMD_four_class"]
+        rows = list(ws.iter_rows(values_only=True))
+        header = [str(h).strip() if h is not None else "" for h in rows[0]]
+        col = {h: i for i, h in enumerate(header)}
+        print(f"  Columns: {header[:10]}")
 
-        # Map column names to expected fields (handle variations)
-        col = {h.lower().strip(): i for i, h in enumerate(header)}
+        variant_pat = re.compile(r"^([A-Z])(\d+)([A-Z])$")
 
-        def get_col(row, *names):
-            for n in names:
-                if n in col:
-                    v = row[col[n]].strip()
-                    if v:
-                        return v
-            return None
+        for row in rows[1:]:
+            try:
+                gene = row[col["Gene"]]
+                uniprot = row[col["Uniprot_id"]]
+                variant_str = row[col["Uniprot_variant"]]
+                mech = row[col["Gene_mechanism_label"]]
+                foldx_raw = row[col.get("raw_FoldX_Monomer", -1)] if "raw_FoldX_Monomer" in col else None
 
-        for line in lines[1:]:
-            if not line.strip():
-                continue
-            row = line.strip().split("\t")
-            if len(row) < 4:
-                continue
-
-            gene = get_col(row, "gene", "gene_name", "symbol")
-            uniprot = get_col(row, "uniprot", "uniprot_id", "accession")
-            aa_pos_raw = get_col(row, "position", "aa_pos", "resnum", "res_num")
-            aa_wt = get_col(row, "wt_aa", "aa_wt", "ref_aa", "wildtype")
-            aa_mut = get_col(row, "mut_aa", "aa_mut", "alt_aa", "mutant")
-            mechanism = get_col(row, "mechanism", "mechanism_class", "class", "type")
-            foldx_ddg_raw = get_col(row, "foldx_ddg", "ddg", "delta_delta_g", "foldx")
-            clinvar_id = get_col(row, "clinvar_id", "clinvar", "variation_id")
-
-            if not all([gene, aa_pos_raw, aa_wt, aa_mut, mechanism]):
-                continue
-
-            # Normalise mechanism label
-            mech = mechanism.upper().strip()
-            if mech not in ("GOF", "DN", "HI", "AR"):
-                # try substring matching
-                if "GAIN" in mech or "GOF" in mech:
-                    mech = "GOF"
-                elif "DOMINANT" in mech and "NEG" in mech or "DN" in mech:
-                    mech = "DN"
-                elif "HAPLO" in mech or "HI" in mech:
-                    mech = "HI"
-                elif "RECESS" in mech or "AR" in mech:
-                    mech = "AR"
-                else:
+                if not all([gene, uniprot, variant_str, mech]):
                     continue
 
-            try:
-                aa_pos = int(aa_pos_raw)
-            except (ValueError, TypeError):
+                mech = str(mech).strip().upper()
+                if mech not in ("GOF", "DN", "HI", "AR"):
+                    continue
+
+                m = variant_pat.match(str(variant_str).strip())
+                if not m:
+                    continue
+                aa_wt, aa_pos_str, aa_mut = m.groups()
+                aa_pos = int(aa_pos_str)
+
+                foldx_ddg = None
+                if foldx_raw is not None:
+                    try:
+                        foldx_ddg = float(foldx_raw)
+                    except (ValueError, TypeError):
+                        pass
+
+                variants.append({
+                    "gene": str(gene).upper(),
+                    "uniprot_id": str(uniprot).strip(),
+                    "aa_pos": aa_pos,
+                    "aa_wt": aa_wt.upper(),
+                    "aa_mut": aa_mut.upper(),
+                    "mechanism": mech,
+                    "foldx_ddg": foldx_ddg,
+                    "clinvar_id": "",
+                })
+            except Exception:
                 continue
 
-            foldx_ddg = None
-            if foldx_ddg_raw:
-                try:
-                    foldx_ddg = float(foldx_ddg_raw)
-                except (ValueError, TypeError):
-                    pass
-
-            variants.append({
-                "gene": gene.upper(),
-                "uniprot_id": uniprot or "",
-                "aa_pos": aa_pos,
-                "aa_wt": aa_wt.upper(),
-                "aa_mut": aa_mut.upper(),
-                "mechanism": mech,
-                "foldx_ddg": foldx_ddg,
-                "clinvar_id": clinvar_id or "",
-            })
-
-        print(f"  Parsed {len(variants)} variants from OSF")
+        print(f"  Parsed {len(variants)} variants from OSF Excel")
 
     except Exception as e:
         print(f"  OSF download failed: {e}")
