@@ -752,7 +752,7 @@ def run_linear_probe(X, y, genes, n_folds=5, seed=42):
             continue
 
         clf = LogisticRegression(max_iter=1000, C=1.0, solver="lbfgs",
-                                  multi_class="ovr", random_state=seed)
+                                  random_state=seed)
         clf.fit(X_train, y_train)
         proba = clf.predict_proba(X_test)
         pred = clf.predict(X_test)
@@ -820,7 +820,7 @@ def _bootstrap_gene_ci(X, y, genes, splits, n_bootstrap=200, seed=42):
                 continue
 
             clf = LogisticRegression(max_iter=500, C=1.0, solver="lbfgs",
-                                      multi_class="ovr", random_state=seed)
+                                      random_state=seed)
             try:
                 clf.fit(X_train, y_train)
                 pred = clf.predict(X_test)
@@ -1243,7 +1243,7 @@ def run(out_dir, seed=0, model_name=ESM2_MODEL_650M, n_stability_components=10,
             if len(set(y_tr)) < 2:
                 continue
             clf = LogisticRegression(max_iter=1000, C=1.0, solver="lbfgs",
-                                     multi_class="ovr", random_state=seed)
+                                     random_state=seed)
             clf.fit(X_tr, y_tr)
             pred = clf.predict(X_te)
             proba = clf.predict_proba(X_te)
