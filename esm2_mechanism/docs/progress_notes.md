@@ -15,7 +15,7 @@ Full design: `EXPERIMENT.md`
 
 ### Gerasimavicius et al. 2022 (primary)
 - NatComms 13:3895, OSF: 10.17605/OSF.IO/H62FQ
-- Local copy: `run_0/data/DiseaseMech_Stability_VEPS.xlsx` (233MB, gitignored)
+- Local copy: `../data/DiseaseMech_Stability_VEPS.xlsx` (233MB, gitignored)
 - **Sheet used: `ClinVar_gene_level`** (not `HGMD_four_class` — that sheet lacks the DN class)
 - `Disease_mechanism` column: GOF / DN / HI / AR / AR, HET / AR, HOM
 - Final counts after filtering to ClinVar disease variants with valid AA notation:
@@ -89,7 +89,7 @@ Full design: `EXPERIMENT.md`
 
 ### 6. Stale embedding cache
 - **Error**: Embeddings cached from synthetic 349-variant run were used for the 618-variant real run, causing shape mismatch in stability subspace fitting
-- **Fix**: Deleted `embeddings_*.npy` and `sequences.json` from `run_0/data/` to force re-extraction
+- **Fix**: Deleted `embeddings_*.npy` and `sequences.json` from `../data/` to force re-extraction
 
 ### 7. AlphaMissense API broken
 - **Error**: `alphamissense.hegelab.org` API returning 0 results
@@ -130,9 +130,33 @@ Full design: `EXPERIMENT.md`
 
 ---
 
-## Next Steps
+## Session 2 findings (May 24, 2026)
 
-1. Get baseline result from current run
-2. If positive signal: run 3B robustness check
-3. Expand to merged dataset (Gerasimavicius + G2P) — needs ClinVar fetch script for G2P-only genes
-4. If family-split CV collapses: investigate ion channel / sodium channel family confound
+### Results summary
+- result_1: Linear probe null (macro-F1 0.279). WT-only 0.580 is the suspicious number.
+- result_2: Family-split collapses WT-only 0.580→0.389. Delta flat. GOF family-split AUROC 0.801 survives.
+- result_3: MLP delta macro-F1 0.431, GOF AUROC 0.744. Superseded by result_5.
+- result_4: Family clustering causal explanation. k=5 purity 26× chance, 74.8% within-family mechanism agreement.
+- result_5: Nonlinear probes (MLP/kNN/GBM/RF). MLP lift likely residual family signal.
+- result_6: **Pathogenicity positive control AUROC 0.88, family-split stable (Δ=0.002).** Pipeline sound. Central finding: ESM-2 encodes pathogenicity not mechanism.
+
+### Central finding
+ESM-2 delta embeddings predict ClinVar pathogenic vs benign at AUROC 0.88 but cannot classify GOF/DN/LOF above chance (macro-F1 0.28). The apparent gene-level mechanism signal is family leakage. This is a methodological consolidation contribution (not a discovery) — publishable at Bioinformatics/Genome Biology.
+
+### Running on RunPod (154.54.102.28:13732)
+1. `tmux mlp2` — `experiment_mlp.py --family_split` — MLP probe under family-split CV (the single blocking experiment)
+2. `tmux merged_emb` — `extract_merged_embeddings.py` — ESM-2 embeddings for merged dataset (19,102 variants, 1,985 genes)
+
+### Merged dataset
+- Gerasimavicius (10,233) + G2P/ClinVar pathogenic-only (8,869 new variants from 1,037 new genes)
+- GOF: 2,825 / DN: 1,716 / LOF: 14,561
+- Files: `esm2_mechanism/data/merged_variants.json`, `esm2_mechanism/data/clinvar_variants.tsv`
+
+### Next steps
+1. Collect MLP family-split results (mlp2)
+2. After embeddings: run linear + MLP probes on merged dataset
+3. Option B: gene-level WT mean embeddings probe
+4. Within-family mechanism analysis (top Pfam families)
+5. Write result_7.md
+6. Multi-seed replication (5 seeds)
+7. Figure for paper
