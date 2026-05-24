@@ -23,6 +23,8 @@ from collections import Counter
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", default="../data")
 parser.add_argument("--out", default="../data/merged_variants.json")
+parser.add_argument("--pathogenic_only", action="store_true",
+                    help="Restrict ClinVar variants to 'pathogenic' only (excludes likely pathogenic)")
 args = parser.parse_args()
 
 # Load Gerasimavicius variants
@@ -44,6 +46,10 @@ with open(clinvar_path) as f:
     clinvar_rows = list(csv.DictReader(f, delimiter="\t"))
 
 # Keep only variants for genes NOT in Gerasimavicius
+if args.pathogenic_only:
+    clinvar_rows = [r for r in clinvar_rows if r.get("clinsig","").lower() == "pathogenic"]
+    print(f"Filtered to pathogenic only: {len(clinvar_rows)} variants")
+
 new_variants = []
 skipped_no_mech = 0
 for r in clinvar_rows:
