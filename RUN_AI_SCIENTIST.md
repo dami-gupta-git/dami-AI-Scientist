@@ -181,11 +181,61 @@ Each result folder contains:
 
 | Branch | Experiment | Status |
 |---|---|---|
-| `evo2-supervised` | Evo2 supervised probe comparison (LR vs SVM vs MLP) | Running |
+| `evo2-xgboost` | Evo2 XGBoost probe comparison | In progress |
+| `esm2-mechanism` | ESM-2 delta-embeddings — GOF/DN/LOF mechanism geometry | Ready to run |
+| `evo2-supervised` | Evo2 supervised probe comparison (LR vs SVM vs MLP) | Previously run |
 | `esm2-depmap` | ESM-2 vs DepMap Mantel test | Previously run |
+
+## Running esm2_mechanism
+
+**Before running, set up ideas:**
+```bash
+# Option A: generate ideas locally first
+ANTHROPIC_API_KEY=<key> python3 launch_scientist.py \
+  --experiment esm2_mechanism \
+  --ideas-only \
+  --skip-novelty-check \
+  --num-ideas 3
+
+# Option B: use seed_ideas.json directly
+cp templates/esm2_mechanism/seed_ideas.json templates/esm2_mechanism/ideas.json
+```
+
+**Baseline run on RunPod (~2-2.5 hours on A100):**
+```bash
+tmux new-session -d -s baseline \
+  'cd /workspace/dami-AI-Scientist && \
+   git pull && \
+   python3 templates/esm2_mechanism/experiment.py --out_dir templates/esm2_mechanism/run_0 \
+   2>&1 | tee /tmp/baseline.log; echo DONE >> /tmp/baseline.log'
+
+tail -f /tmp/baseline.log
+```
+
+Time breakdown:
+- OSF dataset download + parse: ~5 min
+- UniProt sequence fetch (~1200 genes): ~20 min
+- Pfam family fetch (~1200 genes): ~20 min
+- AlphaMissense scores (~8000 variants, rate-limited): ~30-45 min
+- ESM-2 650M embedding extraction (~8000 variant pairs): ~30-45 min
+- Probes + baselines + orthogonality: ~15 min
+
+**AI Scientist run:**
+```bash
+tmux new-session -d -s aiscientist \
+  'cd /workspace/dami-AI-Scientist && \
+   ANTHROPIC_API_KEY=<key> OPENAI_API_KEY=<key> \
+   python3 launch_scientist.py \
+     --experiment esm2_mechanism \
+     --model claude-sonnet-4-5 \
+     --skip-idea-generation \
+     --skip-novelty-check \
+     --no-writeup \
+   2>&1 | tee /tmp/aiscientist.log; echo DONE >> /tmp/aiscientist.log'
+```
 
 ## Current RunPod Connection
 
 ```bash
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod root@216.81.245.125 -p 13793
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod root@216.81.245.125 -p 10075
 ```

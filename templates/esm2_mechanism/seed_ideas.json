@@ -1,0 +1,26 @@
+[
+  {
+    "Name": "mechanism_geometry_650m",
+    "Title": "ESM-2 Delta-Embeddings Encode Molecular Disease Mechanism Geometry Beyond Protein Stability",
+    "Experiment": "Using the Gerasimavicius et al. dataset (GOF/DN/HI/AR ClinVar variants), extract ESM-2 650M delta-embeddings (mutant - WT), fit a stability nuisance subspace (Path A: Megascale, Path B: direct), run 3-class linear probe (GOF/DN/LOF) with gene-split CV. Report AUROC per class, macro-F1 with bootstrap CIs, probe direction cosine matrix vs shuffled-label null. Compare projected vs unprojected results. Compare to baselines: WT-only embeddings, FoldX ΔΔG only. Negative control: shuffled deltas. Pre-registered prediction: GOF has ≥30% less variance explained by stability subspace than LOF.",
+    "Interestingness": 10,
+    "Feasibility": 8,
+    "Novelty": 10
+  },
+  {
+    "Name": "scale_comparison_3b",
+    "Title": "Scale-Emergent vs Scale-Invariant Mechanism Geometry: ESM-2 650M vs 3B Delta-Embeddings",
+    "Experiment": "Run the identical pipeline on ESM-2 3B delta-embeddings. Compare macro-F1 to 650M result under pre-registered thresholds: within ±0.03 = scale-invariant, >0.05 higher = scale-emergent, lower = finding. Report whether probe direction cosine matrix changes with scale — do mechanism axes become more orthogonal (more independent) or more correlated (more compressed) in the larger model?",
+    "Interestingness": 8,
+    "Feasibility": 7,
+    "Novelty": 8
+  },
+  {
+    "Name": "hi_vs_ar_lof_decomposition",
+    "Title": "HI vs AR Within Loss-of-Function: Are Haploinsufficiency and Recessive LOF Geometrically Distinct in ESM-2 Space?",
+    "Experiment": "Using variants from genes labeled HI or AR in Gerasimavicius et al., run a 2-class probe (HI vs AR) in stability-projected ESM-2 delta space under gene-split CV. Gerasimavicius showed HI and AR have similar ΔΔG distributions but different functional class enrichments (HI: transcription factors; AR: enzymes). Test whether ESM-2 deltas separate them. If yes, this suggests protein language models encode functional context (TF vs enzyme) in mutational perturbation space.",
+    "Interestingness": 7,
+    "Feasibility": 8,
+    "Novelty": 7
+  }
+]

@@ -70,6 +70,8 @@ When a new RunPod pod is created:
 |---|---|
 | `evo2-template` | Evo2 DNA embeddings — DNA repair vs TSG |
 | `evo2-validation` | Evo2 DNA embeddings — glycolysis vs T-cell |
+| `evo2-xgboost` | Evo2 embeddings — XGBoost probe comparison |
 | `esm2-function` | ESM-2 protein embeddings — DNA repair vs TSG |
 | `esm2-depmap` | ESM-2 vs DepMap Mantel test (2000 genes) |
 | `esm2-validation` | ESM-2 protein embeddings — glycolysis vs T-cell |
+| `esm2-mechanism` | ESM-2 delta-embeddings — GOF/DN/LOF mechanism geometry |
