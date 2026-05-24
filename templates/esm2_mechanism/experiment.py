@@ -322,8 +322,8 @@ def build_sequence_cache(variants, cache_dir):
 
 def fetch_alphamissense_scores(variants, cache_dir, retries=3, delay=1.0):
     """
-    Fetch per-variant AlphaMissense pathogenicity scores via the AlphaMissense API.
-    Returns numpy array of scores, NaN where unavailable.
+    Fetch per-variant AlphaMissense pathogenicity scores via MyVariant.info
+    (dbnsfp.alphamissense.score field). Returns numpy array of scores, NaN where unavailable.
     """
     cache_path = os.path.join(cache_dir, "alphamissense_scores.json")
     if os.path.exists(cache_path):
@@ -335,7 +335,7 @@ def fetch_alphamissense_scores(variants, cache_dir, retries=3, delay=1.0):
     scores = np.full(len(variants), np.nan)
     to_fetch = []
     for i, v in enumerate(variants):
-        key = f"{v['uniprot_id']}_{v['aa_pos']}_{v['aa_wt']}_{v['aa_mut']}"
+        key = f"{v['gene']}_{v['aa_pos']}_{v['aa_wt']}_{v['aa_mut']}"
         if key in cached:
             val = cached[key]
             if val is not None:
@@ -344,26 +344,38 @@ def fetch_alphamissense_scores(variants, cache_dir, retries=3, delay=1.0):
             to_fetch.append((i, v, key))
 
     if to_fetch:
-        print(f"  Fetching {len(to_fetch)} AlphaMissense scores...")
-        base_url = "https://alphamissense.hegelab.org/api/variant"
+        print(f"  Fetching {len(to_fetch)} AlphaMissense scores from MyVariant.info...")
+        base_url = "https://myvariant.info/v1/hg38/query"
         fetched = 0
         for i, v, key in to_fetch:
-            url = (f"{base_url}?uniprot_id={v['uniprot_id']}"
-                   f"&position={v['aa_pos']}&wt_aa={v['aa_wt']}&mut_aa={v['aa_mut']}")
+            gene = v["gene"]
+            aa_wt = v["aa_wt"]
+            aa_mut = v["aa_mut"]
+            aa_pos = v["aa_pos"]
+            query = f"{gene} p.{aa_wt}{aa_pos}{aa_mut}"
             score = None
             for attempt in range(retries):
                 try:
+                    url = (f"{base_url}?q={urllib.request.quote(query)}"
+                           f"&fields=dbnsfp.alphamissense&size=1")
                     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
                     with urllib.request.urlopen(req, timeout=15) as resp:
                         data = json.loads(resp.read().decode())
-                    score = data.get("am_pathogenicity")
+                    hits = data.get("hits", [])
+                    if hits:
+                        am = hits[0].get("dbnsfp", {}).get("alphamissense", {})
+                        raw_score = am.get("score")
+                        if isinstance(raw_score, list):
+                            raw_score = raw_score[0] if raw_score else None
+                        if raw_score is not None:
+                            score = float(raw_score)
                     break
                 except Exception:
                     if attempt < retries - 1:
                         time.sleep(delay)
             cached[key] = score
             if score is not None:
-                scores[i] = float(score)
+                scores[i] = score
             fetched += 1
             if fetched % 500 == 0:
                 print(f"    {fetched}/{len(to_fetch)}")
