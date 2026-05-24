@@ -479,13 +479,13 @@ def fit_stability_subspace_megascale(cache_dir, n_components=10,
     coefs = np.zeros(n_dims)
     reg = Ridge(alpha=1.0)
     reg.fit(ddg.reshape(-1, 1), deltas)
-    coefs = reg.coef_  # (n_dims,)
+    coefs = np.array(reg.coef_).flatten()
 
     # The stability direction is the unit vector along the regression coefficient
     stability_dir = coefs / (np.linalg.norm(coefs) + 1e-10)
 
     # PCA on residuals after regressing out ΔΔG to find additional stability axes
-    deltas_res = deltas - deltas.dot(stability_dir.reshape(-1, 1)) * stability_dir
+    deltas_res = deltas - deltas.dot(stability_dir)[:, None] * stability_dir
     pca = PCA(n_components=min(n_components - 1, deltas_res.shape[1]))
     pca.fit(deltas_res)
 
@@ -536,9 +536,10 @@ def fit_stability_subspace_direct(deltas, foldx_ddg, n_components=10, genes=None
         reg.fit(ddg_valid.reshape(-1, 1), deltas_valid)
         coefs = reg.coef_
 
+    coefs = np.array(coefs).flatten()
     stability_dir = coefs / (np.linalg.norm(coefs) + 1e-10)
 
-    deltas_res = deltas_valid - deltas_valid.dot(stability_dir.reshape(-1, 1)) * stability_dir
+    deltas_res = deltas_valid - deltas_valid.dot(stability_dir) [:, None] * stability_dir
     n_comp = min(n_components - 1, deltas_res.shape[0] - 1, deltas_res.shape[1] - 1)
     if n_comp < 1:
         return stability_dir.reshape(1, -1)
