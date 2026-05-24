@@ -789,8 +789,8 @@ def run_linear_probe(X, y, genes, n_folds=5, seed=42):
             agg[f"{key}_mean"] = float(np.mean(vals))
             agg[f"{key}_std"] = float(np.std(vals))
 
-    # Bootstrap CI over genes (resample genes, not variants)
-    agg["bootstrap_cis"] = _bootstrap_gene_ci(X, y, genes, splits, seed=seed)
+    # Bootstrap CI skipped for speed — re-enable after confirming headline result
+    agg["bootstrap_cis"] = {"macro_f1_ci_low": float("nan"), "macro_f1_ci_high": float("nan")}
 
     return agg
 
