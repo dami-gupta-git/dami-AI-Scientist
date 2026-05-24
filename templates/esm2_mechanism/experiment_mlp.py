@@ -376,6 +376,8 @@ def main():
                         help="Run family-split CV in addition to gene-split")
     parser.add_argument("--pfam_map", type=str, default=None,
                         help="Path to pfam_families.json (required for --family_split)")
+    parser.add_argument("--max_epochs", type=int, default=100)
+    parser.add_argument("--patience", type=int, default=10)
     args = parser.parse_args()
 
     np.random.seed(args.seed)
@@ -416,12 +418,14 @@ def main():
 
     for feat_name, X in [("delta_mean", delta_mean), ("delta_pos", delta_pos)]:
         print(f"\n=== MLP gene-split: {feat_name} ===")
-        results[f"mlp_{feat_name}_gene"] = run_mlp_probe(X, labels, genes, seed=args.seed, splits=gene_splits)
+        results[f"mlp_{feat_name}_gene"] = run_mlp_probe(X, labels, genes, seed=args.seed, splits=gene_splits,
+                                                          max_epochs=args.max_epochs, patience=args.patience)
         print(f"  macro_f1={results[f'mlp_{feat_name}_gene'].get('macro_f1_mean', float('nan')):.3f}")
 
         if family_splits:
             print(f"\n=== MLP family-split: {feat_name} ===")
-            results[f"mlp_{feat_name}_family"] = run_mlp_probe(X, labels, genes, seed=args.seed, splits=family_splits)
+            results[f"mlp_{feat_name}_family"] = run_mlp_probe(X, labels, genes, seed=args.seed, splits=family_splits,
+                                                                max_epochs=args.max_epochs, patience=args.patience)
             print(f"  macro_f1={results[f'mlp_{feat_name}_family'].get('macro_f1_mean', float('nan')):.3f}")
             delta = (results[f"mlp_{feat_name}_gene"].get("macro_f1_mean", float("nan")) -
                      results[f"mlp_{feat_name}_family"].get("macro_f1_mean", float("nan")))
