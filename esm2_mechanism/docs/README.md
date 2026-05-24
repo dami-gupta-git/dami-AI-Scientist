@@ -89,7 +89,8 @@ Embeddings under `../data/embeddings/`:
 
 ## Highest-priority next experiments (still open)
 
-1. **MLP under family-split CV** on WT-only AND delta — directly resolves the explanation A vs B question in result 5
-2. **DDG2P replication** — second dataset (~2,000 genes)
-3. **SaProt or ESM-3 replication** — the structure-aware steelman
-4. **Within-family mechanism analysis** — test whether mechanism is learnable inside a single Pfam family (potential positive flip side)
+1. **MLP under family-split CV** — **running on RunPod** (`experiment_mlp.py --family_split`)
+2. **Merged dataset probes** — **running on RunPod** (embedding extraction for 19,102 variants, 1,985 genes; GOF: 2,825 / DN: 1,716)
+3. **Within-family mechanism analysis** — test whether mechanism is learnable inside a single Pfam family (potential positive flip side); use merged dataset
+4. **DDG2P replication** — second mechanism dataset (~2,000 genes)
+5. **SaProt or ESM-3 replication** — the structure-aware steelman
