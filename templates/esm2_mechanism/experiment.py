@@ -340,7 +340,7 @@ def fetch_alphamissense_scores(variants, cache_dir, retries=3, delay=1.0):
         print(f"  Fetching {len(to_fetch)} AlphaMissense scores from MyVariant.info...")
         base_url = "https://myvariant.info/v1/hg38/query"
         fetched = 0
-        deadline = time.time() + 1800  # 30 min max
+        deadline = time.time() + 300  # 5 min max — AM is a non-critical baseline
         for i, v, key in to_fetch:
             if time.time() > deadline:
                 print(f"  AlphaMissense fetch timeout after 30 min — saving {fetched} fetched, continuing")
