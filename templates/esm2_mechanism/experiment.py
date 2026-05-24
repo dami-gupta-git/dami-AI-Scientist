@@ -795,7 +795,7 @@ def run_linear_probe(X, y, genes, n_folds=5, seed=42):
     return agg
 
 
-def _bootstrap_gene_ci(X, y, genes, splits, n_bootstrap=200, seed=42):
+def _bootstrap_gene_ci(X, y, genes, splits, n_bootstrap=50, seed=42):
     """Bootstrap CI by resampling test-fold genes."""
     rng = np.random.RandomState(seed)
     all_macro_f1 = []
