@@ -100,9 +100,28 @@ def gene_split_cv(genes, n_folds=5, seed=42):
 # MLP probe (PyTorch)
 # ---------------------------------------------------------------------------
 
+def make_family_splits(genes, pfam_map, n_folds=5, seed=42):
+    """Build family-split CV using Pfam annotations."""
+    n = len(genes)
+    gene_to_pfam = {g: pfam_map.get(g) for g in np.unique(genes) if pfam_map.get(g)}
+    unique_fams = sorted(set(gene_to_pfam.values()))
+    rng = np.random.RandomState(seed)
+    fam_arr = np.array(unique_fams); rng.shuffle(fam_arr)
+    splits = []
+    for fold_fams in np.array_split(fam_arr, n_folds):
+        fold_set = set(fold_fams)
+        te = np.array([genes[i] in gene_to_pfam and gene_to_pfam[genes[i]] in fold_set for i in range(n)])
+        tr = np.array([genes[i] in gene_to_pfam and gene_to_pfam[genes[i]] not in fold_set for i in range(n)])
+        if tr.sum() >= 10 and te.sum() >= 5:
+            splits.append((np.where(tr)[0], np.where(te)[0]))
+    print(f"  Family-split: {len(splits)} folds, {len(unique_fams)} families")
+    return splits
+
+
 def run_mlp_probe(X, labels, genes, n_folds=5, seed=42,
                   hidden=(256, 64), dropout=0.3, lr=1e-3,
-                  max_epochs=100, patience=10, batch_size=256):
+                  max_epochs=100, patience=10, batch_size=256,
+                  splits=None):
     import torch
     import torch.nn as nn
     from torch.utils.data import DataLoader, TensorDataset
@@ -111,7 +130,8 @@ def run_mlp_probe(X, labels, genes, n_folds=5, seed=42,
     y = le.fit_transform(labels)
     classes = le.classes_
     n_classes = len(classes)
-    splits = gene_split_cv(genes, n_folds=n_folds, seed=seed)
+    if splits is None:
+        splits = gene_split_cv(genes, n_folds=n_folds, seed=seed)
 
     fold_results = []
 
@@ -352,6 +372,10 @@ def main():
     parser.add_argument("--out_dir", type=str, default="run_0")
     parser.add_argument("--model", type=str, default=ESM2_MODEL_650M)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--family_split", action="store_true",
+                        help="Run family-split CV in addition to gene-split")
+    parser.add_argument("--pfam_map", type=str, default=None,
+                        help="Path to pfam_families.json (required for --family_split)")
     args = parser.parse_args()
 
     np.random.seed(args.seed)
@@ -381,20 +405,37 @@ def main():
 
     results = {}
 
-    for feat_name, X in [("delta_mean", delta_mean), ("delta_pos", delta_pos)]:
-        print(f"\n=== MLP: {feat_name} ===")
-        results[f"mlp_{feat_name}"] = run_mlp_probe(X, labels, genes, seed=args.seed)
-        print(f"  macro_f1={results[f'mlp_{feat_name}'].get('macro_f1_mean', float('nan')):.3f}")
+    # Build splits
+    gene_splits = gene_split_cv(genes, seed=args.seed)
+    family_splits = None
+    if args.family_split:
+        pfam_path = args.pfam_map or os.path.join(args.data_dir, "pfam_families.json")
+        with open(pfam_path) as f:
+            pfam_map = json.load(f)
+        family_splits = make_family_splits(genes, pfam_map, seed=args.seed)
 
-        print(f"\n=== GBM: {feat_name} (PCA-50) ===")
+    for feat_name, X in [("delta_mean", delta_mean), ("delta_pos", delta_pos)]:
+        print(f"\n=== MLP gene-split: {feat_name} ===")
+        results[f"mlp_{feat_name}_gene"] = run_mlp_probe(X, labels, genes, seed=args.seed, splits=gene_splits)
+        print(f"  macro_f1={results[f'mlp_{feat_name}_gene'].get('macro_f1_mean', float('nan')):.3f}")
+
+        if family_splits:
+            print(f"\n=== MLP family-split: {feat_name} ===")
+            results[f"mlp_{feat_name}_family"] = run_mlp_probe(X, labels, genes, seed=args.seed, splits=family_splits)
+            print(f"  macro_f1={results[f'mlp_{feat_name}_family'].get('macro_f1_mean', float('nan')):.3f}")
+            delta = (results[f"mlp_{feat_name}_gene"].get("macro_f1_mean", float("nan")) -
+                     results[f"mlp_{feat_name}_family"].get("macro_f1_mean", float("nan")))
+            print(f"  Δ(gene − family) = {delta:+.3f}  ← positive ⇒ homology leakage")
+
+        print(f"\n=== GBM gene-split: {feat_name} (PCA-50) ===")
         results[f"gbm_{feat_name}"] = run_sklearn_probe_pca(gbm_fn, X, labels, genes, seed=args.seed, n_pca=50)
         print(f"  macro_f1={results[f'gbm_{feat_name}'].get('macro_f1_mean', float('nan')):.3f}")
 
-        print(f"\n=== RF: {feat_name} (PCA-50) ===")
+        print(f"\n=== RF gene-split: {feat_name} (PCA-50) ===")
         results[f"rf_{feat_name}"] = run_sklearn_probe_pca(rf_fn, X, labels, genes, seed=args.seed, n_pca=50)
         print(f"  macro_f1={results[f'rf_{feat_name}'].get('macro_f1_mean', float('nan')):.3f}")
 
-        print(f"\n=== kNN: {feat_name} ===")
+        print(f"\n=== kNN gene-split: {feat_name} ===")
         results[f"knn_{feat_name}"] = run_sklearn_probe(knn_fn, X, labels, genes, seed=args.seed, normalize=True)
         print(f"  macro_f1={results[f'knn_{feat_name}'].get('macro_f1_mean', float('nan')):.3f}")
 
