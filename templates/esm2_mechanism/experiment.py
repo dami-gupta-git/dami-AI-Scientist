@@ -388,9 +388,10 @@ def fetch_alphamissense_scores(variants, cache_dir, retries=3, delay=1.0):
 
 def get_esm2_embeddings_for_pairs(wt_seqs, mut_seqs, aa_positions,
                                    model_name=ESM2_MODEL_650M,
-                                   device="cuda", batch_size=4):
+                                   device="cuda", batch_size=32):
     """
     Extract ESM-2 embeddings for WT and mutant sequences.
+    WT and mutant are interleaved in the same batch to halve forward passes.
     Returns:
         wt_mean: (N, D) mean-pooled WT embeddings
         mut_mean: (N, D) mean-pooled mutant embeddings
@@ -408,41 +409,41 @@ def get_esm2_embeddings_for_pairs(wt_seqs, mut_seqs, aa_positions,
     wt_mean_list, mut_mean_list = [], []
     wt_pos_list, mut_pos_list = [], []
 
-    all_seqs = list(zip(wt_seqs, mut_seqs, aa_positions))
+    N = len(wt_seqs)
+    # Interleave WT and mutant: [wt0, mut0, wt1, mut1, ...]
+    # batch_size refers to number of pairs; actual forward pass has 2*batch_size sequences
+    for i in range(0, N, batch_size):
+        pairs = list(zip(wt_seqs[i:i+batch_size],
+                         mut_seqs[i:i+batch_size],
+                         aa_positions[i:i+batch_size]))
+        interleaved = []
+        for j, (wt, mut, _) in enumerate(pairs):
+            interleaved.append((f"wt{j}", wt))
+            interleaved.append((f"mut{j}", mut))
 
-    for i in range(0, len(all_seqs), batch_size):
-        batch = all_seqs[i:i + batch_size]
-        wt_batch = [(f"wt{j}", s[0]) for j, s in enumerate(batch)]
-        mut_batch = [(f"mut{j}", s[1]) for j, s in enumerate(batch)]
+        _, _, tokens = batch_converter(interleaved)
+        tokens = tokens.to(device, non_blocking=True)
+        with torch.inference_mode():
+            out = model(tokens, repr_layers=[n_layers])
+        reps = out["representations"][n_layers].cpu().float()
 
-        for seqs_labeled, result_mean, result_pos in [
-            (wt_batch, wt_mean_list, wt_pos_list),
-            (mut_batch, mut_mean_list, mut_pos_list),
-        ]:
-            _, _, tokens = batch_converter(seqs_labeled)
-            tokens = tokens.to(device)
-            import torch
-            with torch.no_grad():
-                out = model(tokens, repr_layers=[n_layers])
-            reps = out["representations"][n_layers]
+        for j, (wt, mut, var_pos) in enumerate(pairs):
+            wt_rep  = reps[2*j]
+            mut_rep = reps[2*j + 1]
 
-            for k, (label, seq) in enumerate(seqs_labeled):
-                seq_len = len(seq)
-                # Mean pool over residues (exclude BOS/EOS)
-                emb_mean = reps[k, 1:seq_len + 1].mean(0).cpu().float().numpy()
-                result_mean.append(emb_mean)
+            wt_mean_list.append(wt_rep[1:len(wt)+1].mean(0).numpy())
+            mut_mean_list.append(mut_rep[1:len(mut)+1].mean(0).numpy())
 
-                # Per-residue at variant position
-                var_idx = batch[k][2] - 1  # 0-indexed in sequence
-                var_idx_token = var_idx + 1  # +1 for BOS token
-                if 0 <= var_idx_token < reps.shape[1]:
-                    emb_pos = reps[k, var_idx_token].cpu().float().numpy()
-                else:
-                    emb_pos = emb_mean  # fallback
-                result_pos.append(emb_pos)
+            var_idx_token = var_pos  # var_pos is 1-indexed; token index = var_pos (BOS at 0)
+            if 0 < var_idx_token <= reps.shape[1] - 1:
+                wt_pos_list.append(wt_rep[var_idx_token].numpy())
+                mut_pos_list.append(mut_rep[var_idx_token].numpy())
+            else:
+                wt_pos_list.append(wt_rep[1:len(wt)+1].mean(0).numpy())
+                mut_pos_list.append(mut_rep[1:len(mut)+1].mean(0).numpy())
 
-        if (i // batch_size) % 10 == 0:
-            print(f"  Embedded {i + len(batch)}/{len(all_seqs)} variant pairs")
+        if (i // batch_size) % 5 == 0:
+            print(f"  Embedded {min(i + batch_size, N)}/{N} variant pairs")
 
     return (np.stack(wt_mean_list), np.stack(mut_mean_list),
             np.stack(wt_pos_list), np.stack(mut_pos_list))
@@ -1000,7 +1001,7 @@ def run_negative_controls(deltas_mean, labels, genes, seed=42):
 # ---------------------------------------------------------------------------
 
 def run(out_dir, seed=0, model_name=ESM2_MODEL_650M, n_stability_components=10,
-        n_cv_folds=5, batch_size=4):
+        n_cv_folds=5, batch_size=32):
     import torch
     os.makedirs(out_dir, exist_ok=True)
     np.random.seed(seed)
@@ -1375,7 +1376,7 @@ parser.add_argument("--out_dir", type=str, default="run_0")
 parser.add_argument("--model", type=str, default=ESM2_MODEL_650M,
                     choices=[ESM2_MODEL_650M, ESM2_MODEL_3B])
 parser.add_argument("--seeds", type=int, nargs="+", default=[0])
-parser.add_argument("--batch_size", type=int, default=4)
+parser.add_argument("--batch_size", type=int, default=32)
 args = parser.parse_args()
 
 if __name__ == "__main__":
