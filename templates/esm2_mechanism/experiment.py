@@ -95,7 +95,7 @@ def fetch_gerasimavicius_dataset(cache_dir):
             data = resp.read()
 
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True)
-        ws = wb["HGMD_four_class"]
+        ws = wb["ClinVar_gene_level"]
         rows = list(ws.iter_rows(values_only=True))
         header = [str(h).strip() if h is not None else "" for h in rows[0]]
         col = {h: i for i, h in enumerate(header)}
@@ -103,19 +103,30 @@ def fetch_gerasimavicius_dataset(cache_dir):
 
         variant_pat = re.compile(r"^([A-Z])(\d+)([A-Z])$")
 
+        # Mechanism label normalisation for ClinVar_gene_level Disease_mechanism column
+        mech_map = {
+            "GOF": "GOF", "DN": "DN", "HI": "HI",
+            "AR": "AR", "AR, HET": "AR", "AR, HOM": "AR",
+        }
+
         for row in rows[1:]:
             try:
+                # Only include ClinVar disease variants (not GNOMAD)
+                row_class = str(row[col.get("Class", -1)] or "").strip().upper()
+                if "CLINVAR" not in row_class:
+                    continue
+
                 gene = row[col["Gene"]]
                 uniprot = row[col["Uniprot_id"]]
                 variant_str = row[col["Uniprot_variant"]]
-                mech = row[col["Gene_mechanism_label"]]
-                foldx_raw = row[col.get("raw_FoldX_Monomer", -1)] if "raw_FoldX_Monomer" in col else None
+                mech_raw = row[col["Disease_mechanism"]]
+                foldx_raw = row[col["raw_FoldX_Monomer"]] if "raw_FoldX_Monomer" in col else None
 
-                if not all([gene, uniprot, variant_str, mech]):
+                if not all([gene, uniprot, variant_str, mech_raw]):
                     continue
 
-                mech = str(mech).strip().upper()
-                if mech not in ("GOF", "DN", "HI", "AR"):
+                mech = mech_map.get(str(mech_raw).strip().upper())
+                if mech is None:
                     continue
 
                 m = variant_pat.match(str(variant_str).strip())
@@ -144,7 +155,7 @@ def fetch_gerasimavicius_dataset(cache_dir):
             except Exception:
                 continue
 
-        print(f"  Parsed {len(variants)} variants from OSF Excel")
+        print(f"  Parsed {len(variants)} variants from OSF Excel (ClinVar_gene_level sheet)")
 
     except Exception as e:
         print(f"  OSF download failed: {e}")
