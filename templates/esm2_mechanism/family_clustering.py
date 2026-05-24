@@ -333,16 +333,19 @@ def main():
     delta_knn5 = results["by_view"]["delta_mean"].get("knn5_purity", float("nan"))
     print(f"WT  embeddings: silhouette={wt_sil:+.3f}  k=5 family purity={wt_knn5:.3f} (null {wt_knn5_null:.3f})")
     print(f"Δ   embeddings: silhouette={delta_sil:+.3f}  k=5 family purity={delta_knn5:.3f}")
-    if not np.isnan(wt_sil):
-        if wt_sil > 0.3:
+    # Use k=5 purity z-score as primary signal — silhouette is unreliable in
+    # high-dimensional space with uneven cluster sizes and many singletons.
+    wt_knn5_z = results["by_view"]["wt_mean"].get("knn5_purity_z", float("nan"))
+    if not np.isnan(wt_knn5_z):
+        if wt_knn5_z > 20:
             tag = "STRONG family clustering — gene-split CV was leaking via homology"
-        elif wt_sil > 0.1:
+        elif wt_knn5_z > 5:
             tag = "MODERATE family clustering — some homology leakage in gene-split CV"
-        elif wt_sil > 0:
-            tag = "WEAK family clustering — gene identity drives WT signal, not family"
+        elif wt_knn5_z > 2:
+            tag = "WEAK family clustering — minor homology leakage"
         else:
             tag = "NO family clustering — gene-level signal is gene-specific, not family-driven"
-        print(f"\n  ⇒ {tag}")
+        print(f"\n  ⇒ {tag}  (k=5 purity z={wt_knn5_z:+.1f}; silhouette unreliable here)")
 
 
 if __name__ == "__main__":
