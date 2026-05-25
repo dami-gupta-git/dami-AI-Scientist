@@ -304,11 +304,11 @@ def train_lora_fold(model, alphabet, wt_seqs, mut_seqs, labels, gene_pfam,
     from peft import get_peft_model, LoraConfig, TaskType
     import copy
 
-    # Fresh LoRA model for this fold (re-apply to base model)
-    # We need to work with the base model — unwrap if already wrapped
+    # Get num_layers before wrapping (fair-esm uses .num_layers, not .config)
     base_model = model
     if hasattr(model, "base_model"):
         base_model = model.base_model.model
+    num_layers = base_model.num_layers
 
     lora_config = LoraConfig(
         r=lora_rank,
@@ -367,19 +367,17 @@ def train_lora_fold(model, alphabet, wt_seqs, mut_seqs, labels, gene_pfam,
         wt_batch  = [(str(j), tr_wt[j][:max_len])  for j in idx_arr if tr_wt[j]  is not None]
         mut_batch = [(str(j), tr_mut[j][:max_len]) for j in idx_arr if tr_mut[j] is not None]
         if not wt_batch:
-            return None, None
+            return None
 
         _, _, wt_tok  = batch_converter(wt_batch)
         _, _, mut_tok = batch_converter(mut_batch)
         wt_tok  = wt_tok.to(device)
         mut_tok = mut_tok.to(device)
 
-        wt_out  = fold_model(wt_tok,  repr_layers=[fold_model.config.num_hidden_layers],
-                             return_contacts=False)
-        mut_out = fold_model(mut_tok, repr_layers=[fold_model.config.num_hidden_layers],
-                             return_contacts=False)
+        wt_out  = fold_model(wt_tok,  repr_layers=[num_layers], return_contacts=False)
+        mut_out = fold_model(mut_tok, repr_layers=[num_layers], return_contacts=False)
 
-        layer = fold_model.config.num_hidden_layers
+        layer = num_layers
         wt_reps  = wt_out["representations"][layer]
         mut_reps = mut_out["representations"][layer]
 
@@ -461,6 +459,10 @@ def extract_delta_embeddings(fold_model, alphabet, wt_seqs, mut_seqs, indices,
     batch_converter = alphabet.get_batch_converter()
     fold_model.eval()
 
+    # Get num_layers from base model (peft wraps it under .base_model.model)
+    base = fold_model.base_model.model if hasattr(fold_model, "base_model") else fold_model
+    num_layers = base.num_layers
+
     all_deltas = []
     valid_flags = []
 
@@ -485,12 +487,11 @@ def extract_delta_embeddings(fold_model, alphabet, wt_seqs, mut_seqs, indices,
         _, _, mut_tok = batch_converter(mut_batch)
 
         with torch.no_grad():
-            layer = fold_model.config.num_hidden_layers
-            wt_out  = fold_model(wt_tok.to(device),  repr_layers=[layer], return_contacts=False)
-            mut_out = fold_model(mut_tok.to(device), repr_layers=[layer], return_contacts=False)
+            wt_out  = fold_model(wt_tok.to(device),  repr_layers=[num_layers], return_contacts=False)
+            mut_out = fold_model(mut_tok.to(device), repr_layers=[num_layers], return_contacts=False)
 
-            wt_reps  = wt_out["representations"][layer]
-            mut_reps = mut_out["representations"][layer]
+            wt_reps  = wt_out["representations"][num_layers]
+            mut_reps = mut_out["representations"][num_layers]
 
             k_valid = 0
             for k, is_valid in enumerate(batch_valid):
