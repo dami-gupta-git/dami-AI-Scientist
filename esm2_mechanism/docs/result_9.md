@@ -34,21 +34,43 @@ A projection head trained with supervised contrastive loss — where positives a
 | MLP (result_7, reference) | gene-split | 0.415 ± 0.042 | 0.710 | 0.549 | 0.714 |
 | MLP (result_7, reference) | family-split | 0.364 ± 0.047 | 0.627 | 0.552 | 0.633 |
 
-### Contrastive lift over raw k-NN baseline
+### Contrastive lift over raw k-NN baseline (Gerasimavicius)
 
 | CV | Δ macro-F1 | Δ GOF AUROC | Δ DN AUROC | Δ LOF AUROC |
 |---|---|---|---|---|
 | Gene-split | **+0.060** | +0.026 | −0.011 | +0.057 |
 | Family-split | **+0.059** | +0.036 | +0.012 | +0.052 |
 
+### Contrastive vs MLP — per-class family-split AUROC (Gerasimavicius)
+
+| Method | GOF AUROC | DN AUROC | LOF AUROC | macro-F1 |
+|---|---|---|---|---|
+| Contrastive k-NN | 0.625 | 0.538 | 0.622 | **0.397** |
+| MLP (result_7) | **0.627** | **0.552** | **0.633** | 0.364 |
+| Raw k-NN | 0.589 | 0.526 | 0.570 | 0.337 |
+
+Contrastive beats MLP on macro-F1 but not on per-class AUROC — the lift is from better calibration across classes, not improved per-class separability.
+
+### Contrastive vs MLP — per-class family-split AUROC (merged, 1,985 genes)
+
+| Method | GOF AUROC | DN AUROC | LOF AUROC | macro-F1 |
+|---|---|---|---|---|
+| Contrastive k-NN | 0.591 | 0.521 | 0.585 | **0.387** |
+| MLP (result_7) | **0.635** | **0.586** | **0.691** | 0.352 |
+| Raw k-NN | 0.604 | 0.546 | 0.574 | 0.342 |
+
+On the merged dataset, contrastive GOF and DN AUROCs are *lower* than raw k-NN under family-split (GOF −0.013, DN −0.025). The macro-F1 lift comes from LOF and class-balance effects, not from recovering GOF/DN mechanism signal.
+
 ### Contrastive vs MLP floor (result_7)
 
 | CV | Contrastive k-NN | MLP | Δ |
 |---|---|---|---|
-| Gene-split | 0.470 | 0.415 | +0.055 |
-| Family-split | **0.397** | 0.364 | **+0.033** |
+| Gene-split (Geras) | 0.470 | 0.415 | +0.055 |
+| Family-split (Geras) | **0.397** | 0.364 | **+0.033** ✓ |
+| Gene-split (Merged) | 0.439 | 0.384 | +0.055 |
+| Family-split (Merged) | **0.387** | 0.352 | **+0.035** ✓ |
 
-Family-split F1 of 0.397 clears the MLP floor (0.364) + 0.03 threshold → **interpretation fires**.
+Both datasets clear the MLP floor + 0.03 threshold on family-split macro-F1.
 
 ---
 
