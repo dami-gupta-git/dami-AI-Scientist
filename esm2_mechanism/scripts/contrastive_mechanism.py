@@ -39,31 +39,32 @@ warnings.filterwarnings("ignore")
 # Data loading
 # ---------------------------------------------------------------------------
 
-def load_data(data_dir, emb_dir):
-    """Load Gerasimavicius variants (aligned to 10231 embeddings) and embeddings."""
-    # merged_valid_variants.json has label_3class pre-set; Gerasimavicius = first 10231
-    # merged_valid_variants.json lives inside embeddings/ on disk
+def load_data(data_dir, emb_dir, merged=False):
+    """Load variants and embeddings. Use merged=True for the full 19100-variant dataset."""
     mv_path = os.path.join(data_dir, "embeddings", "merged_valid_variants.json")
     if not os.path.exists(mv_path):
-        # fallback: same dir as other data files
         mv_path = os.path.join(data_dir, "merged_valid_variants.json")
 
     with open(mv_path) as f:
         mv = json.load(f)
 
-    geras = [v for v in mv if v.get("source") == "gerasimavicius"]
-    assert len(geras) == 10231, f"Expected 10231 Gerasimavicius variants, got {len(geras)}"
+    if merged:
+        variants = mv  # all 19100
+        print(f"Loaded {len(variants)} merged variants (Gerasimavicius + G2P)")
+    else:
+        variants = [v for v in mv if v.get("source") == "gerasimavicius"]
+        assert len(variants) == 10231, f"Expected 10231 Gerasimavicius variants, got {len(variants)}"
+        print(f"Loaded {len(variants)} Gerasimavicius variants")
 
-    labels = np.array([v["label_3class"] for v in geras])
-    genes = np.array([v["gene"] for v in geras])
+    labels = np.array([v["label_3class"] for v in variants])
+    genes = np.array([v["gene"] for v in variants])
+    n = len(variants)
 
-    print(f"Loaded {len(geras)} Gerasimavicius variants")
     print(f"Class distribution: {dict(Counter(labels))}")
     print(f"Unique genes: {len(set(genes))}")
 
-    # Load embeddings — use the merged files, slice Gerasimavicius rows
-    wt_mean = np.load(os.path.join(emb_dir, "merged_embeddings_wt_mean.npy"))[:10231]
-    mut_mean = np.load(os.path.join(emb_dir, "merged_embeddings_mut_mean.npy"))[:10231]
+    wt_mean = np.load(os.path.join(emb_dir, "merged_embeddings_wt_mean.npy"))[:n]
+    mut_mean = np.load(os.path.join(emb_dir, "merged_embeddings_mut_mean.npy"))[:n]
     delta_mean = (mut_mean - wt_mean).astype(np.float32)
 
     print(f"Delta embeddings: {delta_mean.shape}")
@@ -124,61 +125,82 @@ def gene_split_cv(genes, n_folds=5, seed=42):
 
 def build_cross_family_pairs(labels, gene_pfam, le, max_pairs_per_anchor=10, seed=42):
     """
-    For each anchor, sample positives (same mechanism, DIFFERENT Pfam family)
-    and negatives (different mechanism). Returns (anchor_idx, pos_idx, neg_idx).
-
-    Within-family pairs are excluded from positives so the model cannot learn
-    'same family = same mechanism'.
+    Vectorised triplet construction. For each anchor, sample positives from
+    same mechanism + different Pfam family; negatives from different mechanism.
+    Within-family pairs are excluded from positives.
     """
     rng = np.random.RandomState(seed)
     y = le.transform(labels)
     n = len(labels)
+    n_classes = len(le.classes_)
 
-    # Group indices by (mechanism, pfam_family)
-    by_mech = {c: np.where(y == c)[0] for c in range(len(le.classes_))}
+    # Encode family strings to integers for fast comparison
+    unique_fams = list({f for f in gene_pfam if f is not None})
+    fam_to_int = {f: i for i, f in enumerate(unique_fams)}
+    fam_int = np.array([fam_to_int.get(f, -1) for f in gene_pfam], dtype=np.int32)
+
+    # Pre-build index arrays per (class, family) — avoids repeated scanning
+    by_mech = {c: np.where(y == c)[0] for c in range(n_classes)}
+    # For each class, indices grouped by family: dict[(class, fam_int)] -> array
     by_mech_fam = {}
-    for c in range(len(le.classes_)):
+    for c in range(n_classes):
         for idx in by_mech[c]:
-            fam = gene_pfam[idx]
-            key = (c, fam)
+            key = (c, int(fam_int[idx]))
             by_mech_fam.setdefault(key, []).append(idx)
+    by_mech_fam = {k: np.array(v) for k, v in by_mech_fam.items()}
 
-    anchors, positives, negatives = [], [], []
+    # Pre-build negative pool per class (all variants of other classes)
+    neg_by_class = {}
+    for c in range(n_classes):
+        neg_by_class[c] = np.concatenate([by_mech[o] for o in range(n_classes) if o != c])
+
+    # For each class, build a flat positive pool excluding each family —
+    # do this per unique (class, family) combination rather than per anchor
+    # so O(unique_combos) not O(n_variants)
+    by_class_arr = {c: np.array(by_mech[c]) for c in range(n_classes)}
+
+    # Map each variant to its per-class positive pool (same mech, diff family)
+    # We group anchors by (class, family) and assign the same pool to all in group
+    anchor_list, pos_list, neg_list = [], [], []
+
+    unique_combos = set()
+    for i in range(n):
+        unique_combos.add((int(y[i]), int(fam_int[i])))
+
+    # For each unique (class, fam) build the cross-family positive pool once
+    combo_pos_pool = {}
+    for (c, fam) in unique_combos:
+        # All variants of class c whose family != fam
+        class_idxs = by_class_arr[c]
+        class_fams = fam_int[class_idxs]
+        cross_fam_mask = (class_fams != fam) & (class_fams != -1)
+        pool = class_idxs[cross_fam_mask]
+        combo_pos_pool[(c, fam)] = pool
 
     for anchor_i in range(n):
-        anchor_class = y[anchor_i]
-        anchor_fam = gene_pfam[anchor_i]
+        c = int(y[anchor_i])
+        fam = int(fam_int[anchor_i])
+        pos_pool = combo_pos_pool.get((c, fam), np.array([], dtype=np.int64))
+        neg_pool = neg_by_class[c]
 
-        # Positive pool: same mechanism, different family
-        pos_pool = []
-        for (c, fam), idxs in by_mech_fam.items():
-            if c == anchor_class and fam != anchor_fam and fam is not None:
-                pos_pool.extend(idxs)
-
-        if len(pos_pool) == 0:
-            continue
-
-        # Negative pool: different mechanism
-        neg_pool = []
-        for c in range(len(le.classes_)):
-            if c != anchor_class:
-                neg_pool.extend(by_mech[c])
-
-        if len(neg_pool) == 0:
+        if len(pos_pool) == 0 or len(neg_pool) == 0:
             continue
 
         n_pairs = min(max_pairs_per_anchor, len(pos_pool), len(neg_pool))
-        pos_sample = rng.choice(pos_pool, size=n_pairs, replace=len(pos_pool) < n_pairs)
-        neg_sample = rng.choice(neg_pool, size=n_pairs, replace=len(neg_pool) < n_pairs)
+        pos_sample = pos_pool[rng.randint(0, len(pos_pool), n_pairs)]
+        neg_sample = neg_pool[rng.randint(0, len(neg_pool), n_pairs)]
 
-        for pos_i, neg_i in zip(pos_sample, neg_sample):
-            anchors.append(anchor_i)
-            positives.append(pos_i)
-            negatives.append(neg_i)
+        anchor_list.append(np.full(n_pairs, anchor_i, dtype=np.int64))
+        pos_list.append(pos_sample)
+        neg_list.append(neg_sample)
+
+    anchors = np.concatenate(anchor_list)
+    positives = np.concatenate(pos_list)
+    negatives = np.concatenate(neg_list)
 
     print(f"Built {len(anchors)} triplets "
-          f"({len(set(anchors))} unique anchors, cross-family positives only)")
-    return np.array(anchors), np.array(positives), np.array(negatives)
+          f"({len(set(anchors.tolist()))} unique anchors, cross-family positives only)")
+    return anchors, positives, negatives
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +354,7 @@ def run_knn(Z_train, Z_test, y_train, y_test, le, k=10):
 # ---------------------------------------------------------------------------
 
 def run_cv(X, labels, genes, gene_pfam, pfam_map, le, splits, split_name,
-           hidden=(256, 64), seed=42):
+           hidden=(256, 64), seed=42, batch_size=512):
     y = le.transform(labels)
     fold_results_contrastive = []
     fold_results_raw_knn = []
@@ -365,7 +387,7 @@ def run_cv(X, labels, genes, gene_pfam, pfam_map, le, splits, split_name,
         # --- Contrastive projection head ---
         proj, Z_tr_proj, mu, std, epochs = train_projection_head(
             X_tr, labels_tr, gene_pfam_tr, le,
-            hidden=hidden, seed=seed + fold_i
+            hidden=hidden, seed=seed + fold_i, batch_size=batch_size
         )
         Z_te_proj = project_test(proj, X_te, mu, std)
 
@@ -404,12 +426,16 @@ def main():
     parser.add_argument("--n_folds", type=int, default=5)
     parser.add_argument("--proj_dim", type=int, default=64,
                         help="Output dimension of projection head (default 64)")
+    parser.add_argument("--batch_size", type=int, default=512,
+                        help="Batch size for triplet training (default 512, use 4096+ on GPU)")
+    parser.add_argument("--merged", action="store_true",
+                        help="Use full merged dataset (19100 variants, 1985 genes) instead of Gerasimavicius only")
     args = parser.parse_args()
 
     np.random.seed(args.seed)
 
     print("=== Loading data ===")
-    geras, labels, genes, delta_mean = load_data(args.data_dir, args.emb_dir)
+    geras, labels, genes, delta_mean = load_data(args.data_dir, args.emb_dir, merged=args.merged)
 
     print("\n=== Loading Pfam map ===")
     gene_pfam, pfam_map = load_pfam(args.data_dir, genes)
@@ -430,13 +456,15 @@ def main():
     print("GENE-SPLIT CV")
     print("=" * 60)
     gene_cont, gene_raw = run_cv(delta_mean, labels, genes, gene_pfam, pfam_map,
-                                  le, gene_splits, "gene-split", hidden=hidden, seed=args.seed)
+                                  le, gene_splits, "gene-split", hidden=hidden,
+                                  seed=args.seed, batch_size=args.batch_size)
 
     print("\n\n" + "=" * 60)
     print("FAMILY-SPLIT CV")
     print("=" * 60)
     fam_cont, fam_raw = run_cv(delta_mean, labels, genes, gene_pfam, pfam_map,
-                                le, fam_splits, "family-split", hidden=hidden, seed=args.seed)
+                                le, fam_splits, "family-split", hidden=hidden,
+                                seed=args.seed, batch_size=args.batch_size)
 
     results = {
         "description": (
@@ -496,7 +524,8 @@ def main():
         print("      cannot separate mechanism across families.")
 
     os.makedirs(args.out_dir, exist_ok=True)
-    out_path = os.path.join(args.out_dir, f"contrastive_results_seed{args.seed}.json")
+    tag = "merged" if args.merged else "geras"
+    out_path = os.path.join(args.out_dir, f"contrastive_results_{tag}_seed{args.seed}.json")
     with open(out_path, "w") as f:
         json.dump(results, f, indent=2)
     print(f"\nResults written to {out_path}")
