@@ -19,8 +19,6 @@ Runs all baselines (WT-only, mutant-only, WT+mutant concat, delta mean, delta pe
 **`pathogenicity_control.py`**
 Positive control: predicts ClinVar pathogenic vs benign on the same gene set using the same pipeline. Three phases: (1) fetch ClinVar variants (CPU), (2) extract ESM-2 embeddings (GPU), (3) run linear + MLP probes under gene-split and family-split (CPU). Validates pipeline soundness — if pathogenicity AUROC ≥ 0.85 and survives family-split, the mechanism null result is interpretable. Produces `pathogenicity_control.json`.
 
-**`mlp_probe.py`**
-Lightweight MLP family-split check using sklearn MLPClassifier. **Deprecated** — results are unreliable due to missing class weighting on the imbalanced LOF/GOF/DN dataset. Use `experiment_mlp.py --family_split` instead.
 
 ## Data scripts
 
