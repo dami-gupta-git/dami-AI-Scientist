@@ -8,56 +8,7 @@ The workflow is:
 3. Run `launch_scientist.py` — it uses Aider + Claude to implement and run each idea
 4. Pull results back locally
 
----
 
-## 1. SSH Key Setup (one-time per pod)
-
-The working key is `~/.ssh/id_runpod_2` (registered as `runpod_2` in RunPod account settings — injected automatically on pod start).
-
-If the key isn't injected on a new pod, run this in the **pod web terminal**:
-```bash
-echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMuXdSvZt602kwA42h3d78lyGwRgK35z4TA26mG8qlhw runpod_2" > ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-```
-
-Then connect:
-```bash
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod_2 root@<POD_IP> -p <PORT>
-```
-
----
-
-## 2. One-Time Pod Setup
-
-Run once on a fresh pod:
-
-```bash
-# Install system deps
-apt-get update -y && apt-get install -y tmux
-
-# Install Python deps
-pip3 install -r requirements.txt
-
-# Install flash-attn (required for Evo2, compiles from source — takes ~15 min)
-pip3 install flash-attn --no-build-isolation
-
-# Patch Evo2 checkpoint loader (required for PyTorch >= 2.4)
-sed -i 's/weights_only=True/weights_only=False/' \
-  /usr/local/lib/python3.11/dist-packages/vortex/model/utils.py
-```
-
----
-
-## 3. Clone and Set Up the Repo
-
-```bash
-cd /workspace
-git clone https://github.com/dami-gupta-git/dami-AI-Scientist.git
-cd dami-AI-Scientist
-git checkout <branch>   # e.g. evo2-supervised
-```
-
----
 
 ## 4. Generate Hypotheses (locally, on your Mac)
 
