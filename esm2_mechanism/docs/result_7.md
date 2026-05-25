@@ -128,9 +128,16 @@ The honest reading: delta space contains a small amount of mechanism-correlated 
 
 The linear probe (F1=0.279) fails where MLP (F1=0.415) succeeds because the mechanism classes are not linearly separable in delta space — their decision boundaries are curved. This is consistent with mechanism being encoded in a distributed, interaction-dependent way across the 1,280 embedding dimensions, rather than in a single dominant direction.
 
-### The pathogenicity–mechanism gap
+### The pathogenicity–mechanism dissociation
 
-From result_6: pathogenicity AUROC=0.88 (linear, family-split stable) vs mechanism MLP F1=0.364 (nonlinear, small family leakage). The gap is real but narrower than the original framing suggested. ESM-2's pretraining (masked residue prediction on evolutionary sequences) captures both stability/conservation (→pathogenicity) and functional context (→mechanism), but pathogenicity has a cleaner, stronger, more linear signal.
+The correct comparison is family-split-stable numbers only:
+
+- **Pathogenicity**: AUROC 0.88, gene-split → family-split Δ = 0.002 (essentially zero leakage)
+- **Mechanism floor**: macro-F1 ~0.39, +0.06 above always-predict-LOF baseline
+
+This dissociation is **sharper** than result_6 originally documented, not narrower. Result_6 compared pathogenicity AUROC 0.88 to mechanism gene-split MLP F1=0.415 — the leaky comparison. The honest comparison uses the family-split floor (~0.39), which is lower. The mechanism signal that survives the same stringent test as pathogenicity is smaller than result_6 implied.
+
+ESM-2's pretraining (masked residue prediction on evolutionary sequences) captures conservation and local context well — both contribute to pathogenicity signal, which is per-variant and family-split-stable. Mechanism is a gene-level property with family correlates; once those correlates are removed by family-split CV, very little remains.
 
 ### Why DN is consistently weak
 
