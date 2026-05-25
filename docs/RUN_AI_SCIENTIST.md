@@ -10,29 +10,20 @@ The workflow is:
 
 ---
 
-## 1. SSH Key Setup (one-time)
+## 1. SSH Key Setup (one-time per pod)
 
-Generate a key on your Mac and add it to the RunPod pod:
+The working key is `~/.ssh/id_runpod_2` (registered as `runpod_2` in RunPod account settings — injected automatically on pod start).
 
+If the key isn't injected on a new pod, run this in the **pod web terminal**:
 ```bash
-# Generate key
-ssh-keygen -t ed25519 -f ~/.ssh/id_runpod -C "runpod" -N ""
-
-# Copy public key — paste this into the RunPod web terminal (see below)
-cat ~/.ssh/id_runpod.pub
+echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMuXdSvZt602kwA42h3d78lyGwRgK35z4TA26mG8qlhw runpod_2" > ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
 ```
 
-In the RunPod web terminal for your pod, run:
+Then connect:
 ```bash
-echo "YOUR_PUBLIC_KEY_HERE" >> ~/.ssh/authorized_keys
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod_2 root@<POD_IP> -p <PORT>
 ```
-
-Then connect using the direct pod IP (find it in the RunPod console under "Connect"):
-```bash
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod root@<POD_IP> -p <PORT>
-```
-
-Note: the `ssh.runpod.io` proxy requires a key registered in RunPod account settings. The direct IP method above always works once the key is in `authorized_keys`.
 
 ---
 
@@ -115,7 +106,7 @@ When complete, `run_0/` will contain:
 Pull the cached data locally to avoid re-fetching next time:
 ```bash
 # On your Mac
-scp -i ~/.ssh/id_runpod -P <PORT> \
+scp -i ~/.ssh/id_runpod_2 -P <PORT> \
   root@<POD_IP>:/workspace/dami-AI-Scientist/templates/evo2_function/run_0/data/dataset.json \
   templates/evo2_function/run_0/data/dataset.json
 ```
@@ -163,7 +154,7 @@ Results are written to `results/<experiment>/<timestamp>_<idea_name>/`.
 
 ```bash
 # On your Mac — pull all results for an experiment
-scp -r -i ~/.ssh/id_runpod -P <PORT> \
+scp -r -i ~/.ssh/id_runpod_2 -P <PORT> \
   root@<POD_IP>:/workspace/dami-AI-Scientist/results/evo2_function/ \
   results/evo2_function/
 ```
@@ -234,8 +225,10 @@ tmux new-session -d -s aiscientist \
    2>&1 | tee /tmp/aiscientist.log; echo DONE >> /tmp/aiscientist.log'
 ```
 
-## Current RunPod Connection
+## Current RunPod Connection (May 25 2026)
 
 ```bash
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod root@216.81.245.125 -p 10075
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_runpod_2 root@216.81.245.143 -p 11019
 ```
+
+A100 SXM4 80GB, 128 cores.
