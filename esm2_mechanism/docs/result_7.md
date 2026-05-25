@@ -7,11 +7,11 @@
 
 Three experiments completed on May 24–25:
 
-1. **MLP + nonlinear probes with family-split CV** on Gerasimavicius (948 genes): MLP delta_mean family-split F1=0.364, Δ=+0.052 — small leakage, signal is largely real.
-2. **Merged dataset embeddings** (Gerasimavicius + G2P/ClinVar pathogenic-only, 1,985 genes, 19,100 variants): embeddings extracted on RunPod.
-3. **Option B: gene-level WT probe on merged dataset** with corrected full Pfam coverage (1,950/1,985 genes, 1,146 families): family-split F1=0.393, GOF AUROC=0.728, Δ=+0.077.
+1. **MLP + nonlinear probes with family-split CV** on Gerasimavicius (948 genes): MLP delta_mean family-split F1=0.364 (+0.031 above chance). 62% of the gene-split lift disappears under family-split — majority is family leakage, small residual survives.
+2. **Merged dataset embeddings** (Gerasimavicius + G2P/ClinVar pathogenic-only, 1,985 genes, 19,100 variants): embeddings extracted on RunPod. MLP delta probe on merged dataset pending.
+3. **Option B: gene-level WT probe on merged dataset** with full Pfam coverage (1,950/1,985 genes, 1,146 families): family-split F1=0.393 (+0.060 above chance), Δ=+0.077 — same absolute floor as Gerasimavicius, less inflated gene-split.
 
-**Key finding:** ESM-2 delta embeddings contain real nonlinear mechanism signal that survives family-split CV. The signal is weaker than pathogenicity (F1=0.364 vs AUROC=0.88) but present and family-split-robust. This is a positive finding.
+**Key finding:** The family-split floor for ESM-2 mechanism classification is consistently ~0.39 macro-F1 across datasets and probe types — only +0.031 to +0.060 above chance. Gene-split numbers (0.415–0.580) are inflated 50–62% by family leakage. Family-split CV is the necessary diagnostic.
 
 ---
 
@@ -48,7 +48,7 @@ Three experiments completed on May 24–25:
 - **GBM/RF are weaker** — likely due to PCA-50 information loss, not a real probe capacity difference.
 - **mean-pooled delta >> per-residue delta** under MLP (0.415 vs 0.350). The nonlinear mechanism signal is distributed across the whole sequence, not concentrated at the variant position.
 - **DN AUROC consistently stuck at ~0.53 (near chance)** across all probes and CV schemes. DN is the least recoverable class — likely reflects class rarity (894 variants, 60 genes), label noise, and genuine mechanistic heterogeneity.
-- **Family-split leakage is small for delta** (Δ=+0.052 for mean, +0.044 for pos). Compare to WT-only (Δ=+0.191) — the delta operation strips most family identity, leaving real mechanism signal.
+- **Family-split leakage is smaller for delta than WT-only** (Δ=+0.052 vs +0.191) — the delta operation strips more family identity than raw WT embeddings. However, 62% of the above-chance delta MLP gene-split signal still disappears under family-split, so "smaller leakage" should not be read as "mostly mechanism signal."
 
 ---
 
@@ -117,12 +117,12 @@ The one number that holds up more cleanly is **GOF AUROC=0.627 under family-spli
 
 ### What the delta probe tells us
 
-The nonlinear delta signal (MLP F1=0.364 under family-split) passes three tests:
-1. **Family-split robust** — small leakage Δ=+0.052 vs WT-only's +0.191
-2. **Locally clustered** — kNN achieves comparable F1 without any learning, confirming geometric structure
-3. **Whole-sequence** — mean-pooled > per-residue under MLP, so signal is distributed, not local
+The delta MLP family-split result (F1=0.364, +0.031 above chance, +0.085 above always-predict-LOF) is a small positive signal — not a null, but not a strong one. Two observations are robust:
 
-This means ESM-2 delta space contains real mechanism-correlated structure that is not primarily explained by protein family identity.
+1. **Locally clustered** — kNN achieves comparable F1 (0.410) without any learned transformation. Mechanism classes have some local geometric structure in delta space.
+2. **Whole-sequence** — mean-pooled > per-residue under MLP (0.415 vs 0.350 gene-split), so the signal is distributed across the sequence rather than local to the variant position.
+
+The honest reading: delta space contains a small amount of mechanism-correlated structure beyond family identity. Most of what gene-split evaluations report is leakage.
 
 ### Why is the signal nonlinear?
 
@@ -153,11 +153,12 @@ With 948 genes across 662 families (avg 1.4 genes/family), most genes are single
 
 ## 6. What's still needed before posting
 
-1. **MLP family-split re-run with corrected Pfam** (1,146 families) — the MLP family-split used the old 662-family map. Worth re-running for consistency with Option B.
+1. **MLP delta on merged dataset** — **running on RunPod now** (`mlp_merged` tmux, 19,100 variants, 1,985 genes, 1,146 families). This is the single most informative missing number: does better class balance improve the family-split floor?
 2. **Multi-seed replication** — all numbers are seed=0 only. 5 seeds would tighten estimates.
-3. **Delta probe on merged dataset** — not yet run. With better class balance (GOF 2,825 vs 1,983), the delta MLP may be stronger.
-4. **The figure** — one panel showing gene-split vs family-split F1 across probes and datasets; one panel showing pathogenicity vs mechanism dissociation.
-5. **LaTeX draft** — nothing written yet.
+3. **The figure** — one panel showing gene-split vs family-split F1 across probes and datasets; one panel showing pathogenicity vs mechanism dissociation (AUROC 0.88 vs macro-F1 ~0.39 floor).
+4. **LaTeX draft** — nothing written yet.
+
+Note: MLP family-split Pfam consistency — confirmed 662 families is correct for Gerasimavicius (those genes' Pfam annotations were unchanged by the G2P update). The 1,146-family map applies to the merged dataset run (item 1 above).
 
 ---
 
