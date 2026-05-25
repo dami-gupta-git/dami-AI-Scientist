@@ -120,7 +120,7 @@ The standard MLP is trained with cross-entropy loss on mechanism labels. It has 
 ### What remains open
 
 1. **Multi-seed replication** — all numbers are seed=0. The contrastive lift (+0.033 family-split) is above the MLP std (±0.047) but single-seed. Need 5 seeds to confirm it holds.
-2. **Merged dataset** — result_7 showed the MLP floor is ~0.352 on the merged 1,985-gene dataset. Does contrastive training push this higher too?
+2. **Merged dataset** — ✅ Done (see section below). Family-split F1=0.387, +0.035 above MLP floor. Both datasets clear the threshold.
 3. **Hyperparameter sensitivity** — margin, projection dimension (64), batch size (4096), and max_pairs_per_anchor (8) were not tuned. The lift may be larger with tuning.
 4. **What the projection head learns** — which dimensions of the 64-d space carry mechanism information? Gradient attribution or probing the projected space could connect to result_8's within-family findings.
 
@@ -137,8 +137,6 @@ The standard MLP is trained with cross-entropy loss on mechanism labels. It has 
 | MLP | delta_mean | Merged | 0.352 |
 
 The contrastive method is now the best family-split result, and it does so using only mutation-specific signal (delta) — not gene identity (WT).
-
----
 
 ---
 
