@@ -112,9 +112,8 @@ def within_between_ratio(emb, families, n_shuffles=20, seed=42):
     return ratio, null_mean, float(z)
 
 
-def family_probe(gene_emb, gene_families, gene_names, seed=42, min_family_size=3):
-    """Linear probe predicting Pfam family from gene-level embedding.
-    Gene-disjoint CV is automatic since we work at gene level."""
+def family_probe(gene_emb, gene_families, gene_names, seed=42, min_family_size=3, n_folds=5):
+    """Linear probe predicting Pfam family from gene-level embedding, using k-fold CV."""
     fam_counts = Counter(gene_families)
     kept = [f for f, c in fam_counts.items() if c >= min_family_size]
     mask = np.array([f in kept for f in gene_families])
@@ -125,31 +124,37 @@ def family_probe(gene_emb, gene_families, gene_names, seed=42, min_family_size=3
 
     rng = np.random.RandomState(seed)
     order = rng.permutation(len(X))
-    n_test = max(5, len(X) // 5)
-    test_idx = order[:n_test]
-    train_idx = order[n_test:]
-    if len(set(y[train_idx])) < 2:
-        return {"note": "not enough classes in train"}
+    folds = np.array_split(order, n_folds)
 
-    clf = LogisticRegression(max_iter=500, C=1.0, solver="lbfgs",
-                              random_state=seed, multi_class="auto")
-    try:
-        clf.fit(X[train_idx], y[train_idx])
-        pred = clf.predict(X[test_idx])
-        # baseline: predict most-common train family
-        baseline = Counter(y[train_idx]).most_common(1)[0][0]
-        baseline_pred = np.full_like(y[test_idx], baseline)
-        return {
-            "accuracy": float(accuracy_score(y[test_idx], pred)),
-            "macro_f1": float(f1_score(y[test_idx], pred, average="macro",
-                                        zero_division=0)),
-            "majority_baseline_acc": float(accuracy_score(y[test_idx], baseline_pred)),
-            "n_train_genes": int(len(train_idx)),
-            "n_test_genes": int(len(test_idx)),
-            "n_families": int(len(set(y))),
-        }
-    except Exception as e:
-        return {"error": str(e)}
+    accs, f1s, baseline_accs = [], [], []
+    majority_overall = Counter(y).most_common(1)[0][0]
+    for k in range(n_folds):
+        test_idx = folds[k]
+        train_idx = np.concatenate([folds[j] for j in range(n_folds) if j != k])
+        if len(set(y[train_idx])) < 2 or len(test_idx) < 2:
+            continue
+        clf = LogisticRegression(max_iter=500, C=1.0, solver="lbfgs", random_state=seed)
+        try:
+            clf.fit(X[train_idx], y[train_idx])
+            pred = clf.predict(X[test_idx])
+            baseline_pred = np.full_like(y[test_idx], majority_overall)
+            accs.append(float(accuracy_score(y[test_idx], pred)))
+            f1s.append(float(f1_score(y[test_idx], pred, average="macro", zero_division=0)))
+            baseline_accs.append(float(accuracy_score(y[test_idx], baseline_pred)))
+        except Exception:
+            continue
+
+    if not accs:
+        return {"note": "all folds failed"}
+    return {
+        "accuracy": float(np.mean(accs)),
+        "accuracy_std": float(np.std(accs)),
+        "macro_f1": float(np.mean(f1s)),
+        "majority_baseline_acc": float(np.mean(baseline_accs)),
+        "n_folds": len(accs),
+        "n_genes": int(mask.sum()),
+        "n_families": int(len(set(y))),
+    }
 
 
 def main():
