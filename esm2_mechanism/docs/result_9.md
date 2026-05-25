@@ -118,7 +118,54 @@ The contrastive method is now the best family-split result, and it does so using
 
 ---
 
+---
+
+## Merged dataset replication (19,100 variants, 1,985 genes, 1,146 Pfam families)
+
+### Results
+
+| | Contrastive k-NN | Raw k-NN | Δ |
+|---|---|---|---|
+| **Gene-split F1** | 0.439 ± 0.032 | 0.392 ± 0.037 | +0.048 |
+| **Family-split F1** | 0.387 ± 0.016 | 0.342 ± 0.014 | +0.046 |
+| Family-split GOF AUROC | 0.591 | 0.604 | −0.013 |
+| Family-split DN AUROC | 0.521 | 0.546 | −0.025 |
+| Family-split LOF AUROC | 0.585 | 0.574 | +0.011 |
+
+### Cross-dataset comparison
+
+| Dataset | Contrastive family-split F1 | Raw k-NN family-split F1 | MLP floor (result_7) | Above MLP floor? |
+|---|---|---|---|---|
+| Gerasimavicius (948 genes) | **0.397** | 0.337 | 0.364 | ✓ +0.033 |
+| Merged (1,985 genes) | **0.387** | 0.342 | 0.352 | ~ +0.035 above MLP floor |
+
+Note: MLP floor on merged is 0.352 (result_7), so contrastive at 0.387 is +0.035 above it — the threshold fires on merged too (0.387 > 0.352 + 0.03 = 0.382). Both datasets clear the threshold.
+
+### Key observations
+
+**The lift is consistent but smaller on merged.** Contrastive Δ = +0.046 family-split on merged vs +0.060 on Gerasimavicius. The merged dataset has more families (1,146 vs 662) and more diverse gene sets, making cross-family positive pairs noisier — variants from the same mechanism class but very different Pfam families may share less sequence-level signal, reducing the quality of the contrastive supervision.
+
+**GOF and DN AUROC do not improve on merged under family-split.** Unlike Gerasimavicius (GOF +0.036, DN +0.012), the merged dataset shows GOF −0.013 and DN −0.025 under family-split for contrastive vs raw k-NN. The macro-F1 lift comes entirely from LOF (+0.011) and from class-balance effects. This suggests the cross-family GOF and DN signals are harder to extract on the more diverse merged dataset — the contrastive objective may need more pairs or a larger projection head to work across 1,146 families.
+
+**Leakage fraction is stable.** Gene-split → family-split Δ: contrastive +0.052, raw +0.050. Nearly identical, confirming again that the contrastive model is not inflating gene-split via leakage.
+
+### Updated ceiling table (all results)
+
+| Method | Feature | Dataset | Family-split F1 | Above MLP floor |
+|---|---|---|---|---|
+| Contrastive k-NN | delta_mean | Gerasimavicius | **0.397** | +0.033 ✓ |
+| Linear LR | WT-only gene-level | Merged | 0.393 | +0.041 ✓ |
+| Contrastive k-NN | delta_mean | Merged | **0.387** | +0.035 ✓ |
+| Linear LR | WT-only per-variant | Gerasimavicius | 0.389 | +0.025 |
+| MLP | delta_mean | Gerasimavicius | 0.364 | — |
+| MLP | delta_mean | Merged | 0.352 | — |
+
+Contrastive k-NN is the best delta-based method on both datasets and beats the MLP floor on both.
+
+---
+
 ## Files
 
-- `results/20260524_baseline_run/run_0/contrastive_results_seed0.json` — full metrics
-- `scripts/contrastive_mechanism.py` — implementation
+- `results/20260524_baseline_run/run_0/contrastive_results_geras_seed0.json` — Gerasimavicius metrics
+- `results/20260524_baseline_run/run_0/contrastive_results_merged_seed0.json` — merged dataset metrics
+- `scripts/contrastive_mechanism.py` — implementation (use `--merged` flag for merged dataset)
