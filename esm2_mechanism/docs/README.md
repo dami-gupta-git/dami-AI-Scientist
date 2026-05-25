@@ -1,6 +1,8 @@
 # esm2_mechanism — results index
 
-Six `result_*.md` files written across May 23–24, 2026. Read in the order below for the coherent narrative arc. Result 3 is superseded by results 4–6 and should be read with that caveat.
+**This is a standalone research project, not an AI Scientist run.** All experiments were designed and executed manually. The code lives in `esm2_mechanism/scripts/` and was run directly on RunPod (A100 80GB). The project will likely move to its own repository.
+
+Seven `result_*.md` files written across May 23–25, 2026. Read in the order below for the coherent narrative arc. Results 3 and 5 are superseded by result 7.
 
 ---
 
@@ -14,83 +16,85 @@ Six `result_*.md` files written across May 23–24, 2026. Read in the order belo
 
 ### 2. `result_2.md` — Gene-split vs family-split baselines
 **Script:** `family_split_baselines.py` · Same embeddings as result 1, 8 feature sets × 2 CV schemes
-**Headline numbers:** WT-only macro-F1 **collapses** 0.580 → 0.389 under family-split (Δ = +0.191). Delta probe stays flat (no signal to lose). Surprising survivor: GOF AUROC = **0.801** under family-split WT-only.
-**What it concludes:** Most of the WT-only "mechanism signal" was paralog leakage. AlphaMissense carries zero mechanism information. The one thread worth pulling: cross-family GOF signal in WT.
+**Headline numbers:** WT-only macro-F1 **collapses** 0.580 → 0.389 under family-split (Δ = +0.191). Delta probe stays flat. GOF AUROC = **0.801** under family-split WT-only.
+**What it concludes:** Most of WT-only signal is paralog leakage. AlphaMissense carries zero mechanism information.
 **Open question after reading:** *Is there any nonlinear mechanism signal in the delta the linear probe couldn't see?*
 
-### 3. `result_3.md` — MLP probe on delta (FIRST pass) ⚠ SUPERSEDED
-**Script:** `experiment_mlp.py` · MLP probe (256→64, dropout 0.3) on delta_mean
-**Headline numbers:** MLP delta_mean macro-F1 = **0.414** (up from linear 0.279). GOF AUROC 0.729, LOF AUROC 0.727 — both cross pre-registered 0.72 "meaningful" threshold.
-**What it concludes (at the time):** Mechanism is nonlinearly encoded in delta; revises the original claim accordingly.
-**⚠ Why this is superseded:** Result 5 reframes the same experiment as having two competing explanations (real signal vs residual family leakage) and lands on family leakage as more parsimonious. Result 4 quantifies the family-leakage mechanism. Result 6 confirms via positive control. The "mechanism is nonlinearly encoded" conclusion here is no longer the favoured interpretation.
+### 3. `result_3.md` — MLP probe on delta (FIRST pass) ⚠ SUPERSEDED BY RESULT 7
+**Script:** `experiment_mlp.py` · MLP probe (256→64, dropout 0.3) on delta_mean, gene-split only
+**Headline numbers:** MLP delta_mean macro-F1 = **0.414**.
+**⚠ Why this is superseded:** No family-split CV — the 0.414 is gene-split only and includes family leakage. Result 7 provides the correct family-split number (0.364) and calibration against chance.
 
 ### 4. `result_4.md` — Family clustering: the causal explanation
 **Script:** `family_clustering.py` · Pfam clustering analysis on WT, mut, delta embeddings
-**Headline numbers:** k=5 family purity = **26× chance** (z = +78). 50-way family probe accuracy = **0.587** (27× majority baseline). **74.8%** of disease genes share their family's majority mechanism. Delta embeddings strip most family signal but retain a residual (z = +18).
-**What it concludes:** The 0.58 WT-only signal is fully explained by family recognition × family-mechanism correlation. No mechanism learning required. Includes a novelty assessment (2/5 — folk wisdom).
+**Headline numbers:** k=5 family purity = **26× chance** (z = +78). 50-way family probe = **27× majority baseline**. **74.8%** of genes share their family's majority mechanism.
+**What it concludes:** WT-only signal explained by family recognition × family-mechanism correlation. Includes novelty assessment (2/5 — folk wisdom, but not yet demonstrated as a controlled comparison).
 
-### 5. `result_5.md` — Nonlinear probes (MLP/kNN/GBM/RF), CAUTIOUS revisit
-**Script:** `experiment_mlp.py` extended · 4 nonlinear probes on delta_mean and delta_pos
-**Headline numbers:** MLP delta_mean macro-F1 = 0.431, kNN = 0.410, GBM = 0.336, RF = 0.292. delta_pos shows no nonlinear lift. DN stays at chance across all probes (AUROC ~0.52–0.57).
-**What it concludes:** MLP lift is real but its cause is unresolved — could be nonlinear mechanism signal (A) OR nonlinear recovery of residual family clustering (B). Lands on B as more parsimonious and identifies the resolving experiment: **MLP under family-split CV** (still pending).
-**Relationship to result 3:** Same experiment, more probes, more honest framing. Read this instead of result 3 if you only have time for one.
+### 5. `result_5.md` — Nonlinear probes (MLP/kNN/GBM/RF) ⚠ PARTIALLY SUPERSEDED BY RESULT 7
+**Script:** `experiment_mlp.py` extended · 4 probes on delta_mean and delta_pos, gene-split only
+**Headline numbers:** MLP = 0.431, kNN = 0.410, GBM = 0.336, RF = 0.292.
+**⚠ Limitation:** Gene-split only. Result 7 provides the family-split calibration showing 62% of the gene-split lift is leakage.
 
-### 6. `result_6.md` — Pathogenicity positive control: the final answer
-**Script:** `pathogenicity_control.py` · 17,236 ClinVar pathogenic/benign variants across 944 genes / 658 Pfam families
-**Headline numbers:** delta_mean MLP AUROC = **0.878** for pathogenicity. Gene-split → family-split drop = **0.002** (essentially zero). WT-only barely above chance for pathogenicity (AUROC ~0.54–0.60).
-**What it concludes:** Pipeline is sound (positive control passes). The asymmetry IS the central finding: **ESM-2 encodes whether a mutation matters, not how it acts.** Includes calibrated novelty assessment showing this is folk wisdom that has been formally motivated (PreMode, AlphaMissense paper, LoGoFunc, Badonyi & Marsh) but never demonstrated as a controlled side-by-side comparison.
+### 6. `result_6.md` — Pathogenicity positive control
+**Script:** `pathogenicity_control.py` · 17,236 ClinVar pathogenic/benign variants, 944 genes
+**Headline numbers:** Pathogenicity MLP AUROC = **0.878**, family-split Δ = **0.002**.
+**What it concludes:** Pipeline is sound. Pathogenicity AUROC 0.88 (family-split-stable) vs mechanism floor ~0.39 (family-split) — **the dissociation is sharper than originally framed** (see result 7 for correction).
 
----
-
-## The coherent story across all 6
-
-1. **(1)** Linear probe says delta has no mechanism signal; WT-only mysteriously has some.
-2. **(2)** Family-split CV says WT-only's signal mostly evaporates — family leakage suspected.
-3. **(3 / 5)** Nonlinear probes lift delta from 0.28 → 0.42 — but this is more likely residual family signal than mechanism learning.
-4. **(4)** Family clustering quantified — 26× chance, 75% within-family mechanism agreement — provides the causal explanation.
-5. **(6)** Positive control: same pipeline gets AUROC 0.88 on pathogenicity, family-split-stable. **Asymmetry is the publishable finding**: pathogenicity yes, mechanism no.
+### 7. `result_7.md` — Full calibration: all numbers, honest framing
+**Scripts:** `experiment_mlp.py` with family-split, `build_merged_dataset.py`, Option B gene-level WT
+**Headline numbers:**
+- MLP delta gene-split **0.415**, family-split **0.364** (+0.031 above chance; 62% of lift is leakage)
+- Gene-level WT merged dataset family-split **0.393**, GOF AUROC **0.728**
+- Always-predict-LOF baseline: **0.279** (Gerasimavicius), **0.311** (gene-level merged)
+- Family-split floor **~0.39** consistent across 3 different setups (per-variant/gene-level, 2 datasets, linear/MLP)
+**What it concludes:** The ~0.39 floor is real but small. The pathogenicity-mechanism dissociation is sharper than result 6 suggested. The GOF AUROC (0.73–0.80 family-split) is the strongest individual signal. See PUBLISH.md for v1 paper plan built around this.
 
 ---
 
-## Supporting docs (not part of the result series)
+## The coherent story across all 7
 
-- `EXPERIMENT.md` — Pre-registration document (hypothesis, predictions, pre-registered thresholds)
+1. **(1)** Linear probe at chance on delta; WT-only at 0.58 — suspicious.
+2. **(2)** Family-split: WT-only collapses (0.58→0.39). Delta stays flat. GOF AUROC 0.80 survives.
+3. **(4)** Family clustering explains the collapse: ESM-2 encodes family identity, family correlates with mechanism.
+4. **(6)** Positive control: pathogenicity AUROC 0.88, family-split-stable. Pipeline works when signal is there.
+5. **(7)** Full calibration: ~0.39 family-split floor across all setups. 62% of gene-split signal is leakage. Dissociation with pathogenicity is **sharper** than originally thought, not narrower.
+
+**Publication plan:** See `PUBLISH.md` — v1 focuses on the GOF AUROC survival under family-split, framed as a frozen-representation interpretability result. Not AI Scientist output; manual research.
+
+---
+
+## Supporting docs
+
+- `EXPERIMENT.md` — Pre-registration document (original hypothesis and thresholds)
+- `PUBLISH.md` — Publication plan: v1/v2/v3 versioned bioRxiv strategy
 - `explain.txt` — Plain-English explanation of the experiment design
-- `progress_notes.md` — Running log of decisions and observations across the project
+- `progress_notes.md` — Running log of decisions, bugs fixed, observations
 - `../scripts/README.md` — What each script does and when to use it
 
 ---
 
 ## Companion data
 
-Each result references metric files under `../results/20260524_baseline_run/run_0/`:
-
 | Result | JSON file |
 |---|---|
-| 1 | `final_info_seed0.json`, `detailed_results_seed0.json` |
-| 2 | `family_split_baselines.json` |
-| 3, 5 | `mlp_results_seed0.json`, `mlp_probe_results.json` |
-| 4 | `family_clustering.json` |
-| 6 | `pathogenicity_control.json` (also at `../data/pathogenicity_control.json`) |
+| 1 | `results/20260524_baseline_run/run_0/final_info_seed0.json` |
+| 2 | `results/20260524_baseline_run/run_0/family_split_baselines.json` |
+| 3, 5 | `results/20260524_baseline_run/run_0/mlp_results_seed0.json` |
+| 4 | `results/20260524_baseline_run/run_0/family_clustering.json` |
+| 6 | `results/20260524_baseline_run/run_0/pathogenicity_control.json` |
+| 7 | `results/20260524_baseline_run/run_0/option_b_gene_level_wt_merged.json` + merged dataset MLP (pending) |
 
-Embeddings under `../data/embeddings/`:
-- `embeddings_{wt,mut}{,_pos}_esm2_t33_650M_UR50D.npy` — Gerasimavicius (used by results 1–5)
-- `emb_{wt,mut}_mean_pathogenicity_esm2_t33_650M_UR50D_n17259.npy` — ClinVar pathogenicity set (used by result 6)
-
----
-
-## Publishability summary (from result 6)
-
-- **bioRxiv preprint:** publishable as is, framed as methodological consolidation (controlled demonstration + leakage diagnostic + MissION reconciliation), not as a discovery paper.
-- ***Bioinformatics* / *Genome Biology* methodological note:** realistic with current evidence.
-- ***Nat Methods* / *Nat Commun*:** not realistic from this evidence alone — PreMode and AlphaMissense are too directly adjacent. Would require adding the within-family mechanism analysis (positive flip side) and structure-aware model replication (SaProt / ESM-3).
+Embeddings under `data/embeddings/`:
+- `embeddings_{wt,mut}{,_pos}_esm2_t33_650M_UR50D.npy` — Gerasimavicius (results 1–5, 7)
+- `merged_embeddings_{wt,mut}_{mean,pos}.npy` — merged 1,985-gene dataset (result 7)
+- `emb_{wt,mut}_mean_pathogenicity_*.npy` — ClinVar pathogenicity set (result 6)
 
 ---
 
-## Highest-priority next experiments (still open)
+## Highest-priority next experiments
 
-1. **MLP under family-split CV** — **running on RunPod** (`experiment_mlp.py --family_split`)
-2. **Merged dataset probes** — **running on RunPod** (embedding extraction for 19,102 variants, 1,985 genes; GOF: 2,825 / DN: 1,716)
-3. **Within-family mechanism analysis** — test whether mechanism is learnable inside a single Pfam family (potential positive flip side); use merged dataset
-4. **DDG2P replication** — second mechanism dataset (~2,000 genes)
-5. **SaProt or ESM-3 replication** — the structure-aware steelman
+1. **MLP delta on merged dataset** — **running on RunPod now** (19,100 variants, 1,985 genes, 1,146 families). Result will fill in the merged-dataset family-split floor for delta.
+2. **Multi-seed replication** — all numbers seed=0 only. 5 seeds needed before posting.
+3. **The figure** — bar chart: per-class AUROC × CV scheme × dataset (see PUBLISH.md).
+4. **Within-family analysis** — is mechanism learnable within a single Pfam family? (potential positive flip side for v2)
+5. **DDG2P / SaProt replication** — generalisation evidence for v2/v3.
