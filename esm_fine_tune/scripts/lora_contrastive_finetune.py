@@ -222,8 +222,8 @@ def get_variant_sequences(variants, sequences):
     wt_seqs, mut_seqs = [], []
     missing = 0
     for v in variants:
-        gene = v["gene"]
-        seq  = sequences.get(gene)
+        # sequences.json is keyed by UniProt ID
+        seq  = sequences.get(v.get("uniprot_id")) or sequences.get(v.get("gene"))
         if seq is None:
             wt_seqs.append(None)
             mut_seqs.append(None)
