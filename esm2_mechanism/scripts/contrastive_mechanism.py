@@ -68,7 +68,7 @@ def load_data(data_dir, emb_dir, merged=False):
     delta_mean = (mut_mean - wt_mean).astype(np.float32)
 
     print(f"Delta embeddings: {delta_mean.shape}")
-    return geras, labels, genes, delta_mean
+    return variants, labels, genes, delta_mean
 
 
 def load_pfam(data_dir, genes):
