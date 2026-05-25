@@ -358,36 +358,69 @@ def train_lora_fold(model, alphabet, wt_seqs, mut_seqs, labels, gene_pfam,
 
     batch_converter = alphabet.get_batch_converter()
 
-    def encode_indices(idx_arr):
-        """Encode a batch of variant indices -> delta embeddings (on device)."""
-        wt_batch  = [(str(j), tr_wt[j][:max_len])  for j in idx_arr if tr_wt[j]  is not None]
-        mut_batch = [(str(j), tr_mut[j][:max_len]) for j in idx_arr if tr_mut[j] is not None]
-        if not wt_batch:
-            return None
+    def encode_batch(seqs_list):
+        """
+        Encode a list of sequences through fold_model, return mean-pool reps.
+        seqs_list: list of seq strings (truncated to max_len).
+        Returns tensor of shape (len(seqs_list), embed_dim).
+        """
+        labeled = [(str(i), s[:max_len]) for i, s in enumerate(seqs_list)]
+        _, _, toks = batch_converter(labeled)
+        out = fold_model(toks.to(device), repr_layers=[num_layers], return_contacts=False)
+        reps = out["representations"][num_layers]
+        pooled = []
+        for k, (_, s) in enumerate(labeled):
+            slen = min(len(s), max_len)
+            pooled.append(reps[k, 1:slen+1].mean(0))
+        return torch.stack(pooled)  # (B, D)
 
-        _, _, wt_tok  = batch_converter(wt_batch)
-        _, _, mut_tok = batch_converter(mut_batch)
-        wt_tok  = wt_tok.to(device)
-        mut_tok = mut_tok.to(device)
+    def encode_triplet_batch(anc_idx, pos_idx, neg_idx):
+        """
+        Encode anchor, positive, negative in one batched forward pass.
+        Returns (d_anc, d_pos, d_neg) each of shape (B, D), or None on failure.
+        """
+        B = len(anc_idx)
+        # Build concatenated batch: [wt_anc, mut_anc, wt_pos, mut_pos, wt_neg, mut_neg]
+        seqs = []
+        valid = []
+        for j in anc_idx:
+            seqs.append(tr_wt[j] if tr_wt[j] else "A")
+            seqs.append(tr_mut[j] if tr_mut[j] else "A")
+            valid.append(tr_wt[j] is not None and tr_mut[j] is not None)
+        for j in pos_idx:
+            seqs.append(tr_wt[j] if tr_wt[j] else "A")
+            seqs.append(tr_mut[j] if tr_mut[j] else "A")
+        for j in neg_idx:
+            seqs.append(tr_wt[j] if tr_wt[j] else "A")
+            seqs.append(tr_mut[j] if tr_mut[j] else "A")
 
-        wt_out  = fold_model(wt_tok,  repr_layers=[num_layers], return_contacts=False)
-        mut_out = fold_model(mut_tok, repr_layers=[num_layers], return_contacts=False)
+        labeled = [(str(i), s[:max_len]) for i, s in enumerate(seqs)]
+        _, _, toks = batch_converter(labeled)
+        out = fold_model(toks.to(device), repr_layers=[num_layers], return_contacts=False)
+        reps = out["representations"][num_layers]
 
-        layer = num_layers
-        wt_reps  = wt_out["representations"][layer]
-        mut_reps = mut_out["representations"][layer]
+        pooled = []
+        for k, (_, s) in enumerate(labeled):
+            slen = min(len(s), max_len)
+            pooled.append(reps[k, 1:slen+1].mean(0))
 
-        # Mean pool (exclude BOS/EOS)
-        wt_deltas, mut_deltas = [], []
-        for k, (_, seq) in enumerate(wt_batch):
-            slen = min(len(seq), max_len)
-            wt_deltas.append(wt_reps[k, 1:slen+1].mean(0))
-            mut_deltas.append(mut_reps[k, 1:slen+1].mean(0))
+        # Split: each variant is 2 consecutive entries (wt, mut)
+        def delta_block(start):
+            ds = []
+            for i in range(B):
+                wi = start + i * 2
+                mi = wi + 1
+                ds.append(pooled[mi] - pooled[wi])
+            return torch.stack(ds)
 
-        wt_stack  = torch.stack(wt_deltas)
-        mut_stack = torch.stack(mut_deltas)
-        delta = mut_stack - wt_stack
-        return delta
+        d_anc = delta_block(0)
+        d_pos = delta_block(B * 2)
+        d_neg = delta_block(B * 4)
+        return d_anc, d_pos, d_neg
+
+    # Enable gradient checkpointing to save VRAM
+    if hasattr(fold_model, "gradient_checkpointing_enable"):
+        fold_model.gradient_checkpointing_enable()
 
     for epoch in range(max_epochs):
         fold_model.train()
@@ -398,14 +431,13 @@ def train_lora_fold(model, alphabet, wt_seqs, mut_seqs, labels, gene_pfam,
         for step, (anc_b, pos_b, neg_b) in enumerate(loader):
             anc_b = anc_b.numpy(); pos_b = pos_b.numpy(); neg_b = neg_b.numpy()
 
-            # Encode in sub-batches of embed_batch
-            anc_delta = encode_indices(anc_b)
-            pos_delta = encode_indices(pos_b)
-            neg_delta = encode_indices(neg_b)
-            if anc_delta is None:
+            try:
+                d_a, d_p, d_n = encode_triplet_batch(anc_b, pos_b, neg_b)
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
                 continue
 
-            loss = triplet_loss_fn(anc_delta, pos_delta, neg_delta) / grad_accum
+            loss = triplet_loss_fn(d_a, d_p, d_n) / grad_accum
             loss.backward()
             epoch_loss += loss.item() * grad_accum
             n_steps += 1
@@ -414,17 +446,26 @@ def train_lora_fold(model, alphabet, wt_seqs, mut_seqs, labels, gene_pfam,
                 torch.nn.utils.clip_grad_norm_(fold_model.parameters(), 1.0)
                 optimizer.step()
                 optimizer.zero_grad()
+                torch.cuda.empty_cache()
 
-        # Val loss
+        if n_steps % grad_accum != 0:
+            torch.nn.utils.clip_grad_norm_(fold_model.parameters(), 1.0)
+            optimizer.step()
+            optimizer.zero_grad()
+
+        # Val loss on capped subset
         fold_model.eval()
+        val_losses = []
+        val_cap = min(50, len(anc_val))
         with torch.no_grad():
-            anc_val_d = encode_indices(anc_val)
-            pos_val_d = encode_indices(pos_val)
-            neg_val_d = encode_indices(neg_val)
-            if anc_val_d is not None:
-                val_loss = triplet_loss_fn(anc_val_d, pos_val_d, neg_val_d).item()
-            else:
-                val_loss = float("inf")
+            for i in range(0, val_cap, batch_size):
+                ai = anc_val[i:i+batch_size]; pi = pos_val[i:i+batch_size]; ni = neg_val[i:i+batch_size]
+                try:
+                    d_a, d_p, d_n = encode_triplet_batch(ai, pi, ni)
+                    val_losses.append(triplet_loss_fn(d_a, d_p, d_n).item())
+                except torch.cuda.OutOfMemoryError:
+                    torch.cuda.empty_cache()
+        val_loss = float(np.mean(val_losses)) if val_losses else float("inf")
 
         avg_train = epoch_loss / max(n_steps, 1)
         print(f"    Epoch {epoch+1:3d}  train_loss={avg_train:.4f}  val_loss={val_loss:.4f}")
@@ -477,23 +518,24 @@ def extract_delta_embeddings(fold_model, alphabet, wt_seqs, mut_seqs, indices,
             valid_flags.extend(batch_valid)
             continue
 
-        _, _, wt_tok  = batch_converter(wt_batch)
-        _, _, mut_tok = batch_converter(mut_batch)
+        # Concatenate wt and mut in one forward pass
+        combined = wt_batch + mut_batch
+        _, _, toks = batch_converter(combined)
 
         with torch.no_grad():
-            wt_out  = fold_model(wt_tok.to(device),  repr_layers=[num_layers], return_contacts=False)
-            mut_out = fold_model(mut_tok.to(device), repr_layers=[num_layers], return_contacts=False)
+            out = fold_model(toks.to(device), repr_layers=[num_layers], return_contacts=False)
+            reps = out["representations"][num_layers]
 
-            wt_reps  = wt_out["representations"][num_layers]
-            mut_reps = mut_out["representations"][num_layers]
-
+            n_valid = len(wt_batch)
             k_valid = 0
             for k, is_valid in enumerate(batch_valid):
                 if is_valid:
-                    seq = wt_batch[k_valid][1]
-                    slen = min(len(seq), max_len)
-                    wt_rep  = wt_reps[k_valid, 1:slen+1].mean(0)
-                    mut_rep = mut_reps[k_valid, 1:slen+1].mean(0)
+                    wt_seq = wt_batch[k_valid][1]
+                    mut_seq = mut_batch[k_valid][1]
+                    wt_slen = min(len(wt_seq), max_len)
+                    mut_slen = min(len(mut_seq), max_len)
+                    wt_rep  = reps[k_valid, 1:wt_slen+1].mean(0)
+                    mut_rep = reps[n_valid + k_valid, 1:mut_slen+1].mean(0)
                     all_deltas.append((mut_rep - wt_rep).cpu().float())
                     k_valid += 1
                 valid_flags.append(is_valid)
