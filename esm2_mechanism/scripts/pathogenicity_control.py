@@ -264,9 +264,13 @@ def get_or_extract_embeddings(variants, seq_cache, data_dir, model_name,
 def gene_split_cv(genes, n_folds=5, seed=42):
     u = np.array(sorted(set(genes)))
     np.random.RandomState(seed).shuffle(u)
-    return [(np.where(~np.isin(genes, f))[0],
-             np.where( np.isin(genes, f))[0])
-            for f in np.array_split(u, n_folds)]
+    splits = []
+    for f in np.array_split(u, n_folds):
+        tr = np.where(~np.isin(genes, f))[0]
+        te = np.where( np.isin(genes, f))[0]
+        if tr.sum() >= 10 and te.sum() >= 5:
+            splits.append((tr, te))
+    return splits
 
 
 def family_split_cv(genes, pfam_map, n_folds=5, seed=42):
