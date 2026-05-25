@@ -31,31 +31,38 @@ ESM2_MODEL_650M = "esm2_t33_650M_UR50D"
 # Reuse data-loading helpers from experiment.py
 # ---------------------------------------------------------------------------
 
-def load_variants_and_labels(data_dir):
-    cache_path = os.path.join(data_dir, "gerasimavicius_variants.json")
-    with open(cache_path) as f:
-        variants = json.load(f)
-    for v in variants:
-        v["label_3class"] = "LOF" if v["mechanism"] in ("HI", "AR") else v["mechanism"]
-    variants = [v for v in variants if v["uniprot_id"] and v["aa_wt"] and v["aa_mut"] and v["aa_pos"] > 0]
+def load_variants_and_labels(data_dir, variants_file=None):
+    if variants_file:
+        # Pre-filtered variant list (e.g. merged_valid_variants.json) — skip sequence filtering
+        with open(variants_file) as f:
+            valid_variants = json.load(f)
+        for v in valid_variants:
+            if "label_3class" not in v:
+                v["label_3class"] = "LOF" if v["mechanism"] in ("HI", "AR") else v["mechanism"]
+    else:
+        cache_path = os.path.join(data_dir, "gerasimavicius_variants.json")
+        with open(cache_path) as f:
+            variants = json.load(f)
+        for v in variants:
+            v["label_3class"] = "LOF" if v["mechanism"] in ("HI", "AR") else v["mechanism"]
+        variants = [v for v in variants if v["uniprot_id"] and v["aa_wt"] and v["aa_mut"] and v["aa_pos"] > 0]
 
-    seq_path = os.path.join(data_dir, "sequences.json")
-    with open(seq_path) as f:
-        seq_cache = json.load(f)
+        seq_path = os.path.join(data_dir, "sequences.json")
+        with open(seq_path) as f:
+            seq_cache = json.load(f)
 
-    # Reproduce the same filtering as experiment.py to align variant list with embeddings
-    from experiment import apply_missense, window_sequence
-    valid_variants = []
-    for v in variants:
-        uid = v["uniprot_id"]
-        if uid not in seq_cache:
-            continue
-        wt_full = seq_cache[uid]
-        wt_win, new_pos = window_sequence(wt_full, v["aa_pos"])
-        mut_win = apply_missense(wt_win, new_pos, v["aa_wt"], v["aa_mut"])
-        if mut_win is None:
-            continue
-        valid_variants.append(v)
+        from experiment import apply_missense, window_sequence
+        valid_variants = []
+        for v in variants:
+            uid = v["uniprot_id"]
+            if uid not in seq_cache:
+                continue
+            wt_full = seq_cache[uid]
+            wt_win, new_pos = window_sequence(wt_full, v["aa_pos"])
+            mut_win = apply_missense(wt_win, new_pos, v["aa_wt"], v["aa_mut"])
+            if mut_win is None:
+                continue
+            valid_variants.append(v)
 
     labels = np.array([v["label_3class"] for v in valid_variants])
     genes = np.array([v["gene"] for v in valid_variants])
@@ -65,11 +72,18 @@ def load_variants_and_labels(data_dir):
     return valid_variants, labels, genes
 
 
-def load_embeddings(emb_dir, model_name=ESM2_MODEL_650M):
-    emb_wt_mean = np.load(os.path.join(emb_dir, f"embeddings_wt_{model_name}.npy"))
-    emb_mut_mean = np.load(os.path.join(emb_dir, f"embeddings_mut_{model_name}.npy"))
-    emb_wt_pos = np.load(os.path.join(emb_dir, f"embeddings_wt_pos_{model_name}.npy"))
-    emb_mut_pos = np.load(os.path.join(emb_dir, f"embeddings_mut_pos_{model_name}.npy"))
+def load_embeddings(emb_dir, model_name=ESM2_MODEL_650M, prefix=""):
+    """Load embeddings. Use prefix='merged_' for merged dataset files."""
+    if prefix:
+        emb_wt_mean = np.load(os.path.join(emb_dir, f"{prefix}embeddings_wt_mean.npy"))
+        emb_mut_mean = np.load(os.path.join(emb_dir, f"{prefix}embeddings_mut_mean.npy"))
+        emb_wt_pos = np.load(os.path.join(emb_dir, f"{prefix}embeddings_wt_pos.npy"))
+        emb_mut_pos = np.load(os.path.join(emb_dir, f"{prefix}embeddings_mut_pos.npy"))
+    else:
+        emb_wt_mean = np.load(os.path.join(emb_dir, f"embeddings_wt_{model_name}.npy"))
+        emb_mut_mean = np.load(os.path.join(emb_dir, f"embeddings_mut_{model_name}.npy"))
+        emb_wt_pos = np.load(os.path.join(emb_dir, f"embeddings_wt_pos_{model_name}.npy"))
+        emb_mut_pos = np.load(os.path.join(emb_dir, f"embeddings_mut_pos_{model_name}.npy"))
     delta_mean = emb_mut_mean - emb_wt_mean
     delta_pos = emb_mut_pos - emb_wt_pos
     print(f"Embeddings loaded: delta_mean {delta_mean.shape}, delta_pos {delta_pos.shape}")
@@ -378,15 +392,20 @@ def main():
                         help="Path to pfam_families.json (required for --family_split)")
     parser.add_argument("--max_epochs", type=int, default=100)
     parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument("--variants_file", type=str, default=None,
+                        help="Pre-filtered variants JSON (e.g. merged_valid_variants.json). "
+                             "Skips sequence filtering. Embeddings must be aligned.")
+    parser.add_argument("--emb_prefix", type=str, default="",
+                        help="Embedding filename prefix, e.g. 'merged_' for merged dataset.")
     args = parser.parse_args()
 
     np.random.seed(args.seed)
 
     print("=== Loading variants and labels ===")
-    valid_variants, labels, genes = load_variants_and_labels(args.data_dir)
+    valid_variants, labels, genes = load_variants_and_labels(args.data_dir, args.variants_file)
 
     print("\n=== Loading embeddings ===")
-    delta_mean, delta_pos = load_embeddings(args.emb_dir, args.model)
+    delta_mean, delta_pos = load_embeddings(args.emb_dir, args.model, args.emb_prefix)
 
     assert len(delta_mean) == len(labels), (
         f"Embedding count {len(delta_mean)} != variant count {len(labels)}. "
