@@ -60,18 +60,27 @@ for r in clinvar_rows:
     if not mech:
         skipped_no_mech += 1
         continue
-    # Normalise mechanism: G2P uses LOF (not HI/AR split)
+    # G2P uses "LOF" where Gerasimavicius distinguishes "HI" and "AR".
+    # Map to "HI" so the 3-class collapse (HI+AR→LOF) works correctly.
+    # WARNING: all G2P LOF genes become mechanism="HI" in the merged dataset.
+    # Do NOT run the 4-class HI/AR secondary probe on merged data — G2P LOF
+    # genes will all appear as HI, inflating that class and making HI/AR meaningless.
+    # The source field ("clinvar_g2p") identifies these rows.
     if mech == "LOF":
-        mech = "HI"  # treat as HI so 3-class collapses to LOF correctly
+        mech = "HI"
     if mech not in ("GOF", "DN", "HI", "AR"):
         continue
     try:
         aa_pos = int(r["aa_pos"])
     except (ValueError, TypeError):
         continue
+    uniprot_id = r.get("uniprot_id", "").strip()
+    if not uniprot_id:
+        skipped_no_mech += 1  # reuse counter — "no usable row"
+        continue
     new_variants.append({
         "gene": gene,
-        "uniprot_id": r.get("uniprot_id", ""),
+        "uniprot_id": uniprot_id,
         "aa_pos": aa_pos,
         "aa_wt": r["aa_wt"].upper(),
         "aa_mut": r["aa_mut"].upper(),
