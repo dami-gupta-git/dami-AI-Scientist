@@ -160,12 +160,20 @@ _seq_cache: dict[str, str] = {}
 def fetch_protein_sequence(uniprot_id: str) -> Optional[str]:
     if uniprot_id in _seq_cache:
         return _seq_cache[uniprot_id]
+    # Persist to disk so resumes don't re-fetch
+    seq_file = UNIPROT_CACHE / f"{uniprot_id}_seq.txt"
+    if seq_file.exists():
+        seq = seq_file.read_text().strip()
+        _seq_cache[uniprot_id] = seq
+        return seq
+    time.sleep(0.1)  # rate-limit UniProt fetches
     url = UNIPROT_FASTA.format(acc=uniprot_id)
     text = get_text(url, {})
     if not text:
         return None
     lines = text.strip().splitlines()
     seq = "".join(l for l in lines if not l.startswith(">"))
+    seq_file.write_text(seq)
     _seq_cache[uniprot_id] = seq
     return seq
 
@@ -410,7 +418,9 @@ def main():
             if sequence and not validate_wt(v, sequence):
                 log.debug("  WT mismatch %s pos %d: expected %s", gene, v["pos"], v["wt_aa"])
                 continue
-            writer.writerow([gene, uniprot_id or "", v["pos"], v["wt_aa"], v["mut_aa"], v["clinsig"]])
+            if uniprot_id is None:
+                continue  # skip rows with no UniProt ID — downstream can't fetch sequence
+            writer.writerow([gene, uniprot_id, v["pos"], v["wt_aa"], v["mut_aa"], v["clinsig"]])
             gene_written += 1
 
         total_variants += gene_written
