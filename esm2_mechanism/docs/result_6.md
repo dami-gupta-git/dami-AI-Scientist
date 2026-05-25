@@ -1,9 +1,9 @@
 # Result 6 — Pathogenicity positive control: ESM-2 encodes *whether* a mutation matters, not *how*
 
 **Date:** 2026-05-24
-**Run:** `run_0/`, model `esm2_t33_650M_UR50D`, A100 80 GB
-**Script:** `pathogenicity_control.py`
-**Output:** `run_0/pathogenicity_control.json`
+**Run:** `../results/20260524_baseline_run/run_0/`, model `esm2_t33_650M_UR50D`, A100 80 GB
+**Script:** `../scripts/pathogenicity_control.py`
+**Output:** `../results/20260524_baseline_run/run_0/pathogenicity_control.json`
 
 ## TL;DR
 
@@ -146,10 +146,10 @@ result_4 placed the finding at row 3 ("methodological cleanup contribution → b
 
 ## Files
 
-- `pathogenicity_control.py` — 3-phase script (~450 lines, reuses `experiment.py` helpers)
-- `run_0/data/clinvar_pathogenicity_variants.json` — Phase 1 output, 17,259 variants
-- `run_0/data/emb_{wt,mut}_mean_pathogenicity_esm2_t33_650M_UR50D_n17259.npy` — Phase 2 cached embeddings
-- `run_0/pathogenicity_control.json` — Phase 3 metric output (this file's headline source)
+- `../scripts/pathogenicity_control.py` — 3-phase script (~450 lines, reuses `experiment.py` helpers)
+- `../data/clinvar_pathogenicity_variants.json` — Phase 1 output, 17,259 variants
+- `../data/embeddings/emb_{wt,mut}_mean_pathogenicity_esm2_t33_650M_UR50D_n17259.npy` — Phase 2 cached embeddings
+- `../results/20260524_baseline_run/run_0/pathogenicity_control.json` — Phase 3 metric output (this file's headline source)
 
 ## Engineering note
 

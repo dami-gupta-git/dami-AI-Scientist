@@ -22,7 +22,8 @@ def load_results(run_dir):
 def plot_auroc_bars(run_dirs, labels, out_path):
     """Bar chart of per-class AUROC across runs."""
     classes = ["GOF", "DN", "LOF"]
-    colors = {"GOF": "#e74c3c", "DN": "#3498db", "LOF": "#2ecc71"}
+    run_colors = ["#2c3e50", "#7f8c8d", "#95a5a6", "#bdc3c7"]
+    hatches = ["", "//", "xx", ".."]
 
     fig, ax = plt.subplots(figsize=(8, 5))
     x = np.arange(len(classes))
@@ -35,8 +36,9 @@ def plot_auroc_bars(run_dirs, labels, out_path):
         means = results.get("means", results)
         aurocs = [means.get(f"headline_auroc_{cls}", float("nan")) for cls in classes]
         offset = (i - len(run_dirs) / 2 + 0.5) * width
+        color = run_colors[i % len(run_colors)]
         bars = ax.bar(x + offset, aurocs, width * 0.9, label=label,
-                      color=[colors[c] for c in classes], alpha=0.7 + 0.3 * (i == 0))
+                      color=color, hatch=hatches[i % len(hatches)], alpha=0.8)
 
     ax.axhline(0.5, color="gray", linestyle="--", linewidth=1, label="Chance")
     ax.set_xticks(x)
@@ -118,8 +120,6 @@ def plot_variance_explained(run_dir, out_path):
 
     fig, ax = plt.subplots(figsize=(5, 4))
     bars = ax.bar(classes, vals, color=[colors[c] for c in classes], alpha=0.8)
-    ax.axhline(var_exp.get("gof_lof_asymmetry", float("nan")),
-               color="gray", linestyle="--", linewidth=1)
     ax.set_ylabel("Fraction of variance explained\nby stability subspace", fontsize=11)
     ax.set_title("Stability Subspace Variance Explained\nper Mechanism Class", fontsize=12)
     ax.set_ylim(0, 1)

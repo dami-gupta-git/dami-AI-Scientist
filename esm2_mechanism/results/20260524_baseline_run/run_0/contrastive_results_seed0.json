@@ -1,0 +1,54 @@
+{
+  "description": "Contrastive metric learning with cross-family-only positives. Positives: same mechanism, different Pfam family. Negatives: different mechanism. Within-family pairs excluded from positives. Evaluated by k-NN (k=10, cosine) in projected 64-d space.",
+  "architecture": "1280 -> 256 -> 64 (TripletMarginLoss)",
+  "seed": 0,
+  "n_folds": 5,
+  "gene_split": {
+    "contrastive_knn": {
+      "auroc_0_mean": 0.5596965661771246,
+      "auroc_0_std": 0.03990329207784591,
+      "macro_f1_mean": 0.47606656510467743,
+      "macro_f1_std": 0.015333842383985632,
+      "auroc_1_mean": 0.7134098232938919,
+      "auroc_1_std": 0.06543919663615161,
+      "auroc_2_mean": 0.7316350899917414,
+      "auroc_2_std": 0.020658616004775646,
+      "n_folds": 5
+    },
+    "raw_knn_baseline": {
+      "auroc_0_mean": 0.5731396990054104,
+      "auroc_0_std": 0.040794932042604835,
+      "macro_f1_mean": 0.4103445095515411,
+      "macro_f1_std": 0.026876204765687608,
+      "auroc_1_mean": 0.6808150660413017,
+      "auroc_1_std": 0.055262481656164555,
+      "auroc_2_mean": 0.6639401814275903,
+      "auroc_2_std": 0.024412471692242938,
+      "n_folds": 5
+    }
+  },
+  "family_split": {
+    "contrastive_knn": {
+      "auroc_0_mean": 0.5562451592818853,
+      "auroc_0_std": 0.049058293313705974,
+      "macro_f1_mean": 0.4033265601053147,
+      "macro_f1_std": 0.030850862252815952,
+      "auroc_1_mean": 0.6311825370701099,
+      "auroc_1_std": 0.043894570445466345,
+      "auroc_2_mean": 0.6209038317751924,
+      "auroc_2_std": 0.01592975352128468,
+      "n_folds": 5
+    },
+    "raw_knn_baseline": {
+      "auroc_0_mean": 0.5259068025362102,
+      "auroc_0_std": 0.028353668675270397,
+      "macro_f1_mean": 0.33735916488512596,
+      "macro_f1_std": 0.027186834601471727,
+      "auroc_1_mean": 0.5886900501012093,
+      "auroc_1_std": 0.03535277466087181,
+      "auroc_2_mean": 0.5700185573772457,
+      "auroc_2_std": 0.032969439189204634,
+      "n_folds": 5
+    }
+  }
+}

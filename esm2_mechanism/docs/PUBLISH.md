@@ -1,61 +1,75 @@
-# Publication plan — bioRxiv with versioned releases
+# Publication plan — bioRxiv methods note with versioned releases
 
-The plan is to post a minimal v1 quickly (priority date + early feedback), then add controls and generalisation in v2 and v3 as experiments complete. Each version is a self-contained scientific claim; later versions strengthen rather than replace earlier ones.
+The plan is to post a short methods note as v1 (priority date + early feedback), then add diagnostic depth in v2 and (if experiments confirm) generalisation in v3. Each version is a self-contained scientific document; later versions strengthen rather than replace earlier ones.
+
+**Honest scope.** The paper is a **methodological consolidation note**, not a discovery. Its contribution is operationalising family-split CV as a quantitative leakage diagnostic with worked examples — not a novel positive finding. The within-family analysis (kinase delta GOF AUROC 0.777, n=24, std 0.13) is too underpowered to stand alone and belongs only as a single directional sentence in the discussion. Realistic peer-reviewed venue: *Bioinformatics* short methods note.
 
 ---
 
-## v1 — minimal frozen-probe GOF finding (target: ~1 week)
+## v1 — controlled pathogenicity–mechanism dissociation (target: ~1 week)
 
 ### Working title
-*"Frozen ESM-2 embeddings retain a cross-family gain-of-function signal without fine-tuning"*
+*"Frozen ESM-2 encodes mutation pathogenicity strongly and disease mechanism weakly: a controlled dissociation under family-split cross-validation"*
 
 ### Abstract (draft)
-ESM-Effect / ESMGain (Tang et al. 2025) showed that fine-tuning ESM-2 enables prediction of gain-of-function effects in deep mutational scanning data. We show that this signal is already present in **frozen ESM-2 embeddings**, recoverable by a simple probe over mean-pooled per-gene representations at the clinical disease level. On 1,985 human disease genes drawn from Gerasimavicius et al. 2022 and Gene2Phenotype, a logistic regression probe achieves GOF one-vs-rest AUROC 0.73–0.80 under family-disjoint cross-validation, while dominant-negative and loss-of-function classes do not exceed AUROC 0.55 and 0.69 respectively. The selectivity to GOF survives cross-validation in which entire Pfam families are held out, suggesting ESM-2 has implicitly learned sequence properties characteristic of gain-of-function-prone proteins that generalise beyond protein family identity — without requiring task-specific fine-tuning.
+
+Frozen ESM-2 embeddings encode mutation pathogenicity strongly (delta MLP AUROC 0.88, family-split-stable on 17,236 ClinVar pathogenic-vs-benign variants) but disease mechanism weakly (GOF AUROC 0.627 / 0.635 delta MLP family-split on Gerasimavicius / merged datasets respectively; macro-F1 floor 0.35–0.39 consistent across two datasets and two probe types). **The dissociation holds on the same embeddings, the same probe, and the same cross-validation scheme** — ruling out methodology as the explanation. 61–63% of the apparent above-chance gene-split mechanism signal is family-recognition leakage on both datasets — a structural property of standard CV designs on family-clustered disease gene sets. The strongest mechanism-class-level signal that survives family-split is GOF (delta MLP AUROC 0.63; WT-only linear AUROC 0.73–0.80 — though the WT-only number captures gene identity rather than mutation-specific information). DN and LOF do not exceed AUROC 0.55 and 0.69 respectively. Complementing ESM-Effect/ESMGain (Tang et al. 2025), which shows fine-tuned ESM-2 captures GOF in DMS data, we show that the cross-family GOF signal exists in frozen embeddings — but is much smaller than gene-split evaluations suggest, and much smaller than what the same model encodes about damage. **Family-split CV is necessary to recover this dissociation; without it, gene-split evaluations inflate mechanism performance by ~62%.** This framework reconciles apparent positive counterexamples: reports of strong PLM-based mechanism prediction within restricted protein families (e.g., MissION on ion channels, AUROC 0.925) are consistent with our null because within a single Pfam family the family-identity signal that our family-split CV removes is precisely the signal those reports exploit. PLM-based mechanism prediction succeeds within any sufficiently homologous gene set and fails when cross-family generalisation is required.
 
 ### What's in v1
 
 | Section | Content |
 |---|---|
 | Methods | ESM-2 650M, mean-pooled per-variant or per-gene embeddings, logistic regression + MLP probes, 5-fold gene-split AND family-split CV |
-| Dataset | Gerasimavicius (948 genes) + merged with G2P/ClinVar pathogenic (1,985 genes total) |
-| Headline table | Per-class AUROC (GOF / DN / LOF) under gene-split and family-split CV |
-| Brief family-split justification | One paragraph explaining why family-disjoint CV matters (proteins cluster by family; family correlates with mechanism). No deep clustering analysis. |
-| Contrast with ESMGain | One paragraph: ESMGain fine-tunes; we don't. Different and complementary claims. |
-| Honest scope statement | "On Gerasimavicius + G2P, ESM-2 650M, frozen mean-pooled, gene-disjoint and family-disjoint CV" |
+| Dataset | Gerasimavicius (948 genes) + merged with G2P/ClinVar pathogenic (1,985 genes total) + ClinVar 17,236 pathogenic/benign variants (944 genes) for the pathogenicity task |
+| **Co-headline 1 — Pathogenicity** | **Delta MLP AUROC 0.88, family-split-stable (gene-split → family-split Δ = 0.002). Linear probe is sufficient. Confirms ESM-2 deltas carry strong per-variant damage signal.** |
+| **Co-headline 2 — Mechanism** | **Delta MLP family-split macro-F1 0.36 (Gerasimavicius) / 0.35 (merged). GOF AUROC 0.627 / 0.635. DN and LOF do not exceed AUROC 0.55 and 0.69. The 0.35–0.39 floor replicates across 6 (probe × feature × dataset) combinations.** |
+| **The dissociation** | **Same embeddings, same probe family, same CV scheme — pathogenicity AUROC 0.88 vs mechanism above-chance gain of ~0.06 macro-F1. The dissociation is the central finding.** |
+| Supporting methodology | **The leakage diagnostic**: 61–63% of above-chance gene-split mechanism signal is family-recognition leakage on both datasets. Explains *why* family-split CV is the right test and why prior gene-split evaluations overstate. |
+| **Reconciling apparent counterexamples (the MissION case)** | **Dedicated discussion subsection.** Reports of strong PLM-based mechanism prediction in restricted protein families (MissION on ion channels, AUROC 0.925) are not counterexamples to this work's finding — they are consistent with it. Within a single Pfam family all genes share the family-identity signal that family-split CV is designed to remove; what MissION exploits is precisely the family-recognition signal that disappears under family-split. The two findings combined predict that PLM mechanism prediction will succeed within any sufficiently homologous gene set and fail when cross-family generalisation is required. Falsifiable rule for future work: *if a PLM-based mechanism predictor cannot demonstrate its performance under family-split CV, it has measured family recognition, not mechanism.* |
+| Per-class table | GOF / DN / LOF AUROC under gene-split and family-split CV, both datasets. WT-only included as a contrast (higher AUROC 0.73–0.80 for GOF but captures gene identity, not mutation effect). |
+| Brief family-split justification | One paragraph explaining why family-disjoint CV matters (proteins cluster by family; family correlates with mechanism). No deep clustering analysis at v1. |
+| Contrast with ESMGain | One paragraph: ESMGain fine-tunes; we don't. ESMGain doesn't compare to pathogenicity on the same pipeline; we do. Complementary, not competing. |
+| Within-family pilot — discussion only | **One sentence** noting kinase delta GOF AUROC 0.777 (n=24, std 0.13) as directional motivation for future work; explicitly flagged as underpowered. Not a result. |
+| Honest scope statement | "On Gerasimavicius + G2P + ClinVar, ESM-2 650M, frozen mean-pooled, gene-disjoint and family-disjoint CV" |
 
 ### What's deliberately NOT in v1
 
-- Pathogenicity positive control
-- Family-clustering quantification (k-NN purity, family probe, 74.8% within-family agreement)
-- Pfam-coverage methodological cautionary tale
-- Pathogenicity-mechanism dissociation framing
+- Family-clustering quantification (k-NN purity, family probe, 74.8% within-family agreement) — saved for v2
+- Pfam-coverage methodological cautionary tale — saved for v2
+- Pathogenicity-mechanism dissociation **promoted to co-headline** — saved for v2 (v1 reports pathogenicity only as a positive control)
 - Multi-seed replication
 - Second model (SaProt / ESM-3)
 - DDG2P replication
-- Within-family analysis
+- Within-family analysis as a standalone result section (one sentence in discussion only)
 - Stability-subspace projection
-- Per-residue delta exploration
+- Per-residue delta exploration as headline
 
 ### Why v1 is safe to post
 
-- Headline claim is **specific and bounded**: "frozen-probe GOF AUROC 0.73–0.80 family-split on this dataset with this probe"
-- ESMGain is cited as the closest prior work and the contribution is framed as complementary, not competing
-- Numbers reported with std across folds; nothing oversold
-- No claim that ESM-2 "encodes mechanism" (broad); only that frozen embeddings retain cross-family GOF signal (narrow)
-- Reproducibility: link to `esm2_mechanism/` scripts and JSON outputs
+- **The dissociation IS the central claim**, controlled by experimental design: same embeddings, same probe family, same CV scheme, two tasks, opposite outcomes. Hard to dismiss as methodological artifact.
+- ESMGain is cited as the closest prior work; we do not claim to beat it on prediction accuracy and position as a complementary interpretability characterisation, not a competing predictor.
+- Numbers reported with std across folds; nothing oversold.
+- **Pathogenicity baseline is methodologically necessary**, not bonus context. Without it, the mechanism numbers can't be interpreted (is the pipeline broken or is mechanism really not there?). With it, the answer is unambiguous.
+- **Two-dataset replication of the mechanism floor** (Gerasimavicius MLP delta family-split F1 = 0.364; merged = 0.352) — same floor across two independent disease gene sources.
+- **Universal 61–63% leakage fraction**: the gene-split → family-split drop accounts for ~62% of the above-chance signal on Gerasimavicius and ~63% on the merged dataset — nearly identical across very different dataset sizes and family-coverage profiles. Structural property of the task, not a dataset artifact.
+- **Convergence across methods**: 6 distinct (method × dataset × feature) combinations all yield family-split macro-F1 in the narrow 0.34–0.39 band (see result_7.md §5). Independent estimates of the same underlying ceiling.
+- **MissION reconciliation**: explicitly addresses the strongest apparent counterexample in the literature (MissION ion channels, AUROC 0.925) and shows it is consistent with rather than contradictory to the null finding. Resolves an open tension that prior PLM-mechanism papers (PreMode, AlphaMissense, LoGoFunc, Badonyi & Marsh) leave unaddressed.
+- Reproducibility: link to `esm2_mechanism/` scripts and JSON outputs.
 
 ### Page target
-**4–6 pages** (workshop-paper size). Abstract + intro + methods + one results table + one figure + brief discussion.
+**6–8 pages.** Abstract + intro + methods + one results table for the dissociation (pathogenicity vs mechanism on the same pipeline) + one figure + brief discussion. Slightly longer than originally planned because pathogenicity is now a co-headline rather than a single-paragraph control.
 
 ### The one figure
-Bar chart: per-class AUROC (GOF / DN / LOF) × CV scheme (gene-split / family-split) × dataset (Gerasimavicius / merged). Six bars per panel, two panels by probe type (logreg / MLP). Makes the GOF survival vs DN+LOF collapse visually obvious.
+**Two-panel figure** showing the dissociation directly:
+- **Panel A — Pathogenicity (positive task)**: AUROC for delta MLP, gene-split vs family-split, with the ~0 drop visible.
+- **Panel B — Mechanism**: per-class AUROC (GOF / DN / LOF) under gene-split vs family-split, both datasets. Makes the GOF survival vs DN+LOF collapse visually obvious. The gap between Panel A's AUROC (~0.88) and Panel B's per-class AUROCs (max 0.73) is the dissociation made visible.
 
 ### What v1 must NOT claim
-- "ESM-2 encodes mechanism" (too broad)
-- "We provide a novel methodology" (without the diagnostic sections, this is weak)
-- "Our results contradict X" (we contradict no one explicitly at v1)
-- "Family-split CV is the necessary diagnostic" (saved for v2)
-- Anything about pathogenicity (saved for v2)
+- "ESM-2 encodes mechanism" (too broad — claim is the bounded dissociation, not a positive)
+- "We provide a novel methodology" (the leakage quantification is shown but the family-clustering analysis backing it is saved for v2; family-split CV itself is not a novel idea)
+- "Our results contradict X" (we contradict no one explicitly at v1; we confirm folk wisdom with controls)
+- "Family-split CV is the necessary diagnostic for the field" (claim deserves the family-clustering quantification in v2; v1 makes the narrower claim that family-split changes the dissociation numbers materially on this data)
+- "Mechanism is unlearnable from PLM representations" (only claim what the data supports: under this setup, on these datasets, the floor is ~0.36)
 
 ### Prior-work positioning (related work table for v1 intro)
 
@@ -84,30 +98,32 @@ The honest one-line positioning: *"While recent work focuses on building better 
 
 ---
 
-## v2 — add controls and methodological framing (target: ~3 weeks after v1)
+## v2 — add diagnostic and dissociation framing (target: ~3 weeks after v1)
+
+Pathogenicity is already in v1 as a positive control. v2 promotes it from "control" to "co-headline" by adding the family-clustering diagnostic that makes the dissociation a methodological contribution rather than just two numbers in a table.
+
+v1 already contains the dissociation as the co-headline finding. v2 adds the *causal explanation* (family clustering) and the *methodological cautionary tale* (Pfam-coverage bug) to upgrade the family-split CV claim from "we found it works on our data" to "we know why it works and we provide a diagnostic with worked failure modes."
 
 ### What's added in v2
 
-1. **Pathogenicity positive control** — same pipeline, ClinVar pathogenic vs benign, 17,236 variants, AUROC 0.88 family-split-stable. Establishes the pipeline can extract a signal when one is present, anchoring the modest mechanism numbers as a real ceiling rather than a pipeline failure.
+1. **Family-clustering quantification** — k=5 family purity 26× chance, 50-way family probe 27× majority baseline, 74.8% within-family mechanism agreement. Gives the family-split CV justification quantitative teeth and makes the "family-split CV is necessary" claim defensible. Without this, v1's family-split is just a stricter test we ran; with this, v1's family-split is a principled response to a quantified confound.
 
-2. **Pathogenicity–mechanism dissociation** as a second framing. The same embeddings encode whether a mutation is damaging strongly and linearly (AUROC 0.88) but how it acts only weakly and nonlinearly (macro-F1 floor ~0.39 family-split). This is a controlled side-by-side comparison that prior work (PreMode, AlphaMissense paper, LoGoFunc, Badonyi & Marsh) states qualitatively but does not demonstrate.
+2. **Pfam-coverage methodological note** — the worked example showing how silent CV failure (Δ=+0.011 inflated to +0.077 when annotations were extended) makes leakage diagnostics non-trivial to apply correctly. Useful cautionary tale that anyone applying family-split CV needs to know about.
 
-3. **Family-clustering quantification** — k=5 family purity 26× chance, 50-way family probe 27× majority baseline, 74.8% within-family mechanism agreement. Gives the family-split CV justification quantitative teeth.
+3. **Multi-seed replication** — five seeds on all v1 numbers, tighten confidence intervals from std-across-folds to std-across-seeds.
 
-4. **Pfam-coverage methodological note** — the worked example showing how silent CV failure (Δ=+0.011 inflated to +0.077 when annotations were extended) makes leakage diagnostics non-trivial to apply correctly. Useful cautionary tale.
-
-5. **Multi-seed replication** — five seeds on all headline numbers, tighten confidence intervals.
+4. **Expanded dissociation discussion** — section comparing this work to PreMode, AlphaMissense, LoGoFunc, Badonyi & Marsh. v1 only cites these briefly; v2 positions the dissociation explicitly as the first controlled side-by-side demonstration of a claim multiple prior papers state qualitatively as motivation.
 
 ### What v2's title becomes
-*"Frozen ESM-2 embeddings encode pathogenicity broadly but mechanism narrowly: a controlled dissociation and family-split CV diagnostic"*
+*"Why does frozen ESM-2 encode pathogenicity but not mechanism? Family-clustering as the causal explanation and family-split CV as the diagnostic"*
 
 ### Page target
-**8–12 pages.** Adds one section on the positive control, one on the family clustering, one on the dissociation framing, and a discussion of methodology.
+**10–14 pages.** Adds one section on family clustering, one on the Pfam-coverage cautionary tale, expanded related-work discussion, and multi-seed numbers throughout.
 
-### v2's stronger claims (now defensible because of controls)
-- "The mechanism null is a real absence of signal, not a pipeline failure (positive control AUROC 0.88)"
-- "Family-split CV is necessary to detect family-recognition shortcuts; we provide quantified worked examples"
-- "The pathogenicity-mechanism dissociation in PLM embeddings is real, controlled, and quantified"
+### v2's stronger claims (now defensible because of the added diagnostic)
+- "Family-split CV is necessary to detect family-recognition shortcuts; we provide the quantitative explanation (74.8% within-family mechanism agreement) and worked examples"
+- "Silent CV failure from incomplete annotation coverage is a non-trivial methodological pitfall — we show a worked example where leakage looked 7× smaller than it actually was"
+- "The pathogenicity-mechanism dissociation observed in v1 has a specific causal mechanism: family identity is strongly encoded but mechanism class is only weakly encoded beyond family"
 
 ---
 
@@ -123,7 +139,7 @@ The honest one-line positioning: *"While recent work focuses on building better 
    - **Why SaProt before ESM-3:** SaProt is fully open-weight (ESM-3 is partially gated through EvolutionaryScale), cheaper per embedding, and cleanly isolates *structure* as the variable. ESM-3 alone would conflate two pretraining differences (structure + function) and not tell us which mattered.
    - **Why both, not just one:** SaProt + ESM-3 together let us answer "which pretraining ingredient (if any) recovers mechanism information," which is more decisive than either alone.
 
-3. **Within-family mechanism analysis** — test whether mechanism is learnable inside a single Pfam family. The potential positive flip side: if mechanism IS recoverable within a homologous family, the field has been measuring the wrong problem. Reframes the paper from "PLMs don't do mechanism cross-proteome" to "mechanism prediction is a within-family problem."
+3. ~~**Within-family mechanism analysis**~~ — **deferred**. Pilot on existing data (PF00069 kinase, n=24, delta GOF AUROC 0.777, F1 std 0.13; PF00071 Ras, n=13, degenerate due to 90% GOF) showed sample sizes are too small for a publishable standalone finding (≤24 genes per family, 5 per test fold). Belongs as one directional sentence in v1's discussion, not as a planned v3 experiment. To revisit only if a labeled cohort with ≥50 genes per family in ≥2 mechanism classes becomes available (e.g., full human kinome with curated mechanism labels — does not currently exist).
 
 4. **Evo2 comparison** — if relevant. Tests whether genomic-context features (paralogs, dosage) recover signal that pure-protein features miss.
 
@@ -132,12 +148,12 @@ The honest one-line positioning: *"While recent work focuses on building better 
 ### What v3's title becomes
 Depends on outcomes:
 - If SaProt + ESM-3 + DDG2P all confirm the GOF-selective pattern: *"Cross-family disease mechanism is selectively encoded for gain-of-function in protein language models: a multi-model, multi-dataset characterisation"*
-- If within-family analysis is positive: *"Disease mechanism prediction from protein language models is a within-family problem"*
 - If SaProt recovers mechanism but ESM-2 doesn't: *"Structure-aware protein language models recover disease mechanism that sequence-only models miss"*
 - If ESM-3 recovers mechanism but SaProt doesn't: *"Function-aware pretraining is necessary for mechanism encoding in protein language models"*
+- If SaProt + ESM-3 also fail: paper ends at v2 with a strengthened negative claim (no v3)
 
 ### Page target
-**15–25 pages.** Full peer-reviewed paper. Target *Bioinformatics* or *Genome Biology* methodological note; possibly *Nat Methods* if within-family or SaProt results are strong.
+**12–18 pages.** Methods-note expansion. Target *Bioinformatics* methodological note. *Nat Methods* / *Nat Commun* are **not realistic targets** given the within-family pilot did not produce a publishable positive flip, the GOF finding overlaps materially with ESMGain, and the dissociation finding overlaps with PreMode + AlphaMissense. Set expectations accordingly.
 
 ---
 
@@ -159,7 +175,7 @@ These are the load-bearing claims. They're already supported by the data in `res
 ### What might change across versions
 
 - Multi-seed replication might shift point estimates ±0.02–0.04 — flag this in v1 by reporting fold std
-- Re-running MLP delta on merged dataset with corrected Pfam might shift the MLP numbers (currently pending) — v1 should report Gerasimavicius MLP results only
+- ~~Re-running MLP delta on merged dataset with corrected Pfam might shift the MLP numbers (currently pending)~~ ✅ **Done**: merged MLP delta_mean family-split F1 = 0.352 (delta_pos = 0.336), confirming the Gerasimavicius floor. v1 reports both datasets.
 - DDG2P / SaProt could falsify the GOF claim — v3 will report honestly either way
 
 ### What gets cut entirely if results don't cooperate
@@ -194,8 +210,10 @@ These are the load-bearing claims. They're already supported by the data in `res
 
 | File | Status |
 |---|---|
-| Headline numbers JSON | ✓ `results/20260524_baseline_run/run_0/option_b_gene_level_wt_merged.json` |
-| MLP probe results | ✓ `results/20260524_baseline_run/run_0/mlp_results_seed0.json` |
+| Headline numbers JSON (Option B WT, merged) | ✓ `results/20260524_baseline_run/run_0/option_b_gene_level_wt_merged.json` |
+| MLP probe results (Gerasimavicius) | ✓ `results/20260524_baseline_run/run_0/mlp_results_seed0.json` |
+| MLP probe results (merged dataset) | ✓ `results/20260524_baseline_run/run_0/mlp_merged_results_seed0.json` |
+| Pathogenicity positive control | ✓ `results/20260524_baseline_run/run_0/pathogenicity_control.json` |
 | Per-class AUROCs all conditions | ✓ in JSONs above |
 | Multi-seed for v1 numbers | ✗ Need to run 5 seeds — cheap |
 | Figure | ✗ Need to write `plot_publication_v1.py` |

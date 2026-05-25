@@ -77,4 +77,4 @@ This is a **stronger and more specific finding** than a pure negative. It rules 
 ## Data Location
 
 - Results from this run: not yet saved to disk (run interactively)
-- Embeddings for re-running: `results/esm2_mechanism/20260524_baseline_run/run_0/data/`
+- Embeddings for re-running: `../data/embeddings/`

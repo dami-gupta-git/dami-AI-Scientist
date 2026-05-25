@@ -40,3 +40,7 @@ pip install fair-esm scikit-learn scipy
 git clone https://github.com/dami-gupta-git/dami-AI-Scientist.git /workspace/dami-AI-Scientist
 cd /workspace/dami-AI-Scientist && git checkout esm2-mechanism
 ```
+
+
+Git token for dami-gupta-git
+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

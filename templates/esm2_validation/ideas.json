@@ -1,0 +1,10 @@
+[
+    {
+        "Name": "esm2_vs_evo2_comparison",
+        "Title": "Protein vs DNA Embeddings for Functional Classification: ESM-2 vs Evo2 on DNA Repair vs Tumor Suppressor Genes",
+        "Experiment": "Using cached ESM-2 embeddings from run_0/data/, train the same MLP classifier (256->128->1) used in the Evo2 experiment and report AUROC, accuracy, F1. Compare directly to the Evo2 result (0.78 AUROC). Additionally run the same unsupervised geometry analysis: k-means ARI, within/between class cosine distance ratio, silhouette score. The key comparison table should show: ESM-2 supervised AUROC vs Evo2 (0.78), ESM-2 silhouette vs Evo2 (0.044), ESM-2 distance ratio vs Evo2 (0.963). If ESM-2 shows both higher AUROC AND better unsupervised clustering, it suggests protein sequence space is more functionally organised than DNA sequence space for these gene classes.",
+        "Interestingness": 10,
+        "Feasibility": 10,
+        "Novelty": 9
+    }
+]

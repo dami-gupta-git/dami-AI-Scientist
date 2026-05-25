@@ -193,9 +193,9 @@ def main():
     # ------------------------------------------------------------------
     print("\n=== Building CV splits ===")
     pfam_map = fetch_pfam_families(valid_variants, seq_cache, data_dir)
-    gene_splits = gene_split_cv(emb_wt_mean, labels_3class, genes_arr,
+    gene_splits = gene_split_cv(None, None, genes_arr,
                                  n_folds=args.n_folds, seed=args.seed)
-    family_splits = gene_family_split_cv(emb_wt_mean, labels_3class, genes_arr,
+    family_splits = gene_family_split_cv(None, None, genes_arr,
                                           pfam_map, n_folds=args.n_folds,
                                           seed=args.seed)
 
@@ -217,7 +217,7 @@ def main():
     }
 
     for name, X in features.items():
-        if X.shape[1] > 0 and np.allclose(X.std(0).sum(), 0):
+        if X.shape[1] > 0 and np.allclose(X.std(), 0):
             print(f"  [skip {name}: zero variance]")
             continue
         print(f"\n--- {name} (dim={X.shape[1]}) ---")
@@ -261,12 +261,23 @@ def main():
     wt_family = results["family_split"].get("wt_only_mean", {}).get("macro_f1_mean", float("nan"))
     delta_gene   = results["gene_split"].get("delta_mean", {}).get("macro_f1_mean", float("nan"))
     delta_family = results["family_split"].get("delta_mean", {}).get("macro_f1_mean", float("nan"))
-    print(f"WT-only macro-F1:  gene-split {wt_gene:.3f}  →  family-split {wt_family:.3f}  "
-          f"(Δ = {wt_gene - wt_family:+.3f})")
-    print(f"Delta   macro-F1:  gene-split {delta_gene:.3f}  →  family-split {delta_family:.3f}  "
-          f"(Δ = {delta_gene - delta_family:+.3f})")
+
+    def _fmt(val):
+        return f"{val:.3f}" if not np.isnan(val) else "n/a"
+
+    def _fmt_delta(a, b):
+        return f"{a - b:+.3f}" if not (np.isnan(a) or np.isnan(b)) else "n/a"
+
+    print(f"WT-only macro-F1:  gene-split {_fmt(wt_gene)}  →  family-split {_fmt(wt_family)}  "
+          f"(Δ = {_fmt_delta(wt_gene, wt_family)})")
+    print(f"Delta   macro-F1:  gene-split {_fmt(delta_gene)}  →  family-split {_fmt(delta_family)}  "
+          f"(Δ = {_fmt_delta(delta_gene, delta_family)})")
     print(f"Chance (3-class):  0.333\n")
-    if not np.isnan(wt_family):
+
+    if not family_splits:
+        print("  ⇒ Family-split CV was infeasible (< 10 Pfam families annotated).")
+        print("    Gene-split results only — homology leakage cannot be assessed.")
+    elif not np.isnan(wt_family):
         if wt_family > 0.50:
             print("  ⇒ WT-only signal SURVIVES family-split — real protein-family→mechanism")
             print("    association in ESM-2 embeddings.")
