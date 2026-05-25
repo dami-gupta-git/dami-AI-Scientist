@@ -48,7 +48,7 @@ Three experiments completed on May 24–25:
 - **GBM/RF are weaker** — likely due to PCA-50 information loss, not a real probe capacity difference.
 - **mean-pooled delta >> per-residue delta** under MLP (0.415 vs 0.350). The nonlinear mechanism signal is distributed across the whole sequence, not concentrated at the variant position.
 - **DN AUROC consistently stuck at ~0.53 (near chance)** across all probes and CV schemes. DN is the least recoverable class — likely reflects class rarity (894 variants, 60 genes), label noise, and genuine mechanistic heterogeneity.
-- **Family-split leakage is smaller for delta than WT-only** (Δ=+0.052 vs +0.191) — the delta operation strips more family identity than raw WT embeddings. However, 62% of the above-chance delta MLP gene-split signal still disappears under family-split, so "smaller leakage" should not be read as "mostly mechanism signal."
+- **Delta has smaller absolute Δ than WT-only** (Δ=+0.052 vs +0.191 on Gerasimavicius) — but this comparison is misleading because the gene-split baselines differ (0.415 vs 0.580). The honest comparison is the leakage fraction: both lose ~62% of their above-chance gene-split signal under family-split (see section 2). The delta and WT-only signals are roughly equally family-mediated; the delta just has a lower gene-split ceiling to begin with.
 
 ---
 
@@ -139,6 +139,8 @@ The delta MLP family-split result (F1=0.364, +0.031 above chance, +0.085 above a
 
 The honest reading: delta space contains a small amount of mechanism-correlated structure beyond family identity. Most of what gene-split evaluations report is leakage.
 
+**Anomaly: delta_pos family-split goes ↑ from Gerasimavicius to merged (0.306 → 0.336).** Every other setup goes ↓ when moving to the merged dataset (more diverse families → less inflation). This reversal could reflect a real effect (per-residue local context generalises better across diverse gene families), fold variance (std ~0.05 makes a +0.03 difference uninterpretable at single seed), or a subtle data alignment issue. Single-seed results make this difference uninterpretable. Treat delta_pos merged cautiously until multi-seed replication.
+
 ### Why is the signal nonlinear?
 
 The linear probe (F1=0.279) fails where MLP (F1=0.415) succeeds because the mechanism classes are not linearly separable in delta space — their decision boundaries are curved. This is consistent with mechanism being encoded in a distributed, interaction-dependent way across the 1,280 embedding dimensions, rather than in a single dominant direction.
@@ -169,17 +171,17 @@ With 948 genes across 662 families (avg 1.4 genes/family), most genes are single
 
 ## 5. Revised scientific claim
 
-> The family-split floor for ESM-2-based mechanism classification is approximately **macro-F1 = 0.35–0.39**, observed consistently across five methodologically distinct setups:
+> The family-split floor for ESM-2-based mechanism classification is approximately **macro-F1 = 0.35–0.39**, observed across two methods (linear probe on WT, MLP on delta) × two datasets (Gerasimavicius, merged) × two feature representations (mean-pooled, per-residue):
 >
-> | Setup | Family-split F1 |
-> |---|---|
-> | WT-only linear, Gerasimavicius per-variant | 0.389 |
-> | WT-only linear, merged gene-level | 0.393 |
-> | MLP delta_mean, Gerasimavicius | 0.364 |
-> | MLP delta_mean, merged | **0.352** |
-> | MLP delta_pos, merged | 0.336 |
+> | Method | Feature | Dataset | Family-split F1 |
+> |---|---|---|---|
+> | Linear LR | WT-only per-variant | Gerasimavicius | 0.389 |
+> | Linear LR | WT-only gene-level | Merged | 0.393 |
+> | MLP | delta_mean | Gerasimavicius | 0.364 |
+> | MLP | delta_mean | Merged | **0.352** |
+> | MLP | delta_pos | Merged | 0.336 |
 >
-> These five numbers come from different aggregation levels (per-variant vs gene-level), different datasets (948 vs 1,985 genes), different features (WT vs delta), and different probe types (linear vs MLP) — convergence near 0.35–0.39 across all of them is stronger evidence of a real ceiling than identical setups would be. The floor is consistently ~0.35–0.39 regardless of how you approach it. This floor is only +0.031–+0.056 above chance (0.333), representing a small but nonzero residual. The majority of apparent mechanism signal in gene-split evaluations (50–62%) is explained by ESM-2's strong encoding of Pfam family identity combined with within-family mechanism correlation (74.8%). A nonlinear probe (MLP) is required to detect even this small residual in delta space — linear probes give F1=0.279 (chance). Gene-level WT embeddings achieve a slightly stronger floor (F1=0.393, GOF AUROC=0.728) than delta embeddings (F1=0.364), suggesting gene identity carries more mechanism information than the mutation-specific perturbation. In contrast, pathogenicity (ClinVar pathogenic vs benign, result_6) achieves AUROC=0.88 linearly, family-split-stable — ESM-2 encodes pathogenicity much more strongly and cleanly than mechanism. Family-split CV is the necessary diagnostic: without it, gene-split performance on small datasets overstates mechanism signal by 50%+.
+> This is two methods on two datasets with two feature representations — not five independent methods. But the convergence to 0.35–0.39 across both methods, both datasets, and both feature types is still informative: if it were purely noise, you would not expect this consistency. The floor is ~0.35–0.39 regardless of which combination you use. This floor is only +0.031–+0.056 above chance (0.333), representing a small but nonzero residual. The majority of apparent mechanism signal in gene-split evaluations (50–62%) is explained by ESM-2's strong encoding of Pfam family identity combined with within-family mechanism correlation (74.8%). A nonlinear probe (MLP) is required to detect even this small residual in delta space — linear probes give F1=0.279 (chance). Gene-level WT embeddings achieve a slightly stronger floor (F1=0.393, GOF AUROC=0.728) than delta embeddings (F1=0.364), suggesting gene identity carries more mechanism information than the mutation-specific perturbation. In contrast, pathogenicity (ClinVar pathogenic vs benign, result_6) achieves AUROC=0.88 linearly, family-split-stable — ESM-2 encodes pathogenicity much more strongly and cleanly than mechanism. Family-split CV is the necessary diagnostic: without it, gene-split performance on small datasets overstates mechanism signal by 50%+.
 
 ---
 
