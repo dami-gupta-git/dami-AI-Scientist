@@ -66,10 +66,15 @@ Three experiments completed on May 24–25:
 
 **Calibrating the delta MLP signal against chance:**
 
-| Number | Above chance (0.333) | Above always-predict-LOF (~0.31) |
+Always-predict-LOF macro-F1 baselines (exact):
+- Gerasimavicius (GOF 1983 / DN 894 / LOF 7354): **0.279**
+- Merged variants (GOF 2825 / DN 1716 / LOF 14559): **0.288**
+- Gene-level merged (GOF 146 / DN 107 / LOF 1732): **0.311**
+
+| Number | Above chance (0.333) | Above always-predict-LOF (0.279) |
 |---|---|---|
-| MLP gene-split 0.415 | +0.082 | +0.105 |
-| MLP family-split 0.364 | +0.031 | +0.054 |
+| MLP gene-split 0.415 | +0.082 | +0.136 |
+| MLP family-split 0.364 | +0.031 | +0.085 |
 
 **62% of the above-chance gene-split signal disappears under family-split.** Only 38% survives. F1=0.364 is +0.031 above chance — a small residual, not a strong signal. The correct framing is: *a small residual survives family-split, but the majority of the gene-split lift is family-mediated leakage.* The delta MLP is better than WT-only (which loses ~80% under family-split) but still mostly leakage.
 
