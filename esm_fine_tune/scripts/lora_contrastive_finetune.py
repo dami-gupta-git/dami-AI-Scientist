@@ -246,45 +246,56 @@ def get_variant_sequences(variants, sequences):
     return wt_seqs, mut_seqs
 
 # ---------------------------------------------------------------------------
-# LoRA fine-tuning
+# Pure-PyTorch LoRA (no peft) — compatible with fair-esm native interface
 # ---------------------------------------------------------------------------
 
-def apply_lora(model, lora_rank, lora_alpha, lora_dropout):
-    from peft import get_peft_model, LoraConfig, TaskType
-    # Target the query and value projection matrices in ESM-2 attention layers
-    config = LoraConfig(
-        r=lora_rank,
-        lora_alpha=lora_alpha,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=lora_dropout,
-        bias="none",
-        # ESM-2 is a feature extraction model (not seq2seq), use FEATURE_EXTRACTION
-        task_type=TaskType.FEATURE_EXTRACTION,
-    )
-    model = get_peft_model(model, config)
-    model.print_trainable_parameters()
+import torch
+import torch.nn as nn
+
+
+class LoRALinear(nn.Module):
+    """Wraps an existing nn.Linear with a low-rank LoRA adapter."""
+    def __init__(self, linear: nn.Linear, rank: int, alpha: float, dropout: float = 0.0):
+        super().__init__()
+        self.linear   = linear
+        self.rank      = rank
+        self.scale     = alpha / rank
+        in_f, out_f    = linear.in_features, linear.out_features
+        self.lora_A    = nn.Parameter(torch.zeros(rank, in_f))
+        self.lora_B    = nn.Parameter(torch.zeros(out_f, rank))
+        self.dropout   = nn.Dropout(dropout)
+        nn.init.kaiming_uniform_(self.lora_A, a=np.sqrt(5))
+
+    def forward(self, x):
+        base = self.linear(x)
+        lora = self.dropout(x) @ self.lora_A.T @ self.lora_B.T
+        return base + lora * self.scale
+
+
+def inject_lora(model, rank, alpha, dropout):
+    """Replace q_proj and v_proj in every ESM-2 attention layer with LoRALinear."""
+    n_injected = 0
+    for layer in model.layers:
+        attn = layer.self_attn
+        for proj_name in ("q_proj", "v_proj"):
+            orig = getattr(attn, proj_name)
+            lora_layer = LoRALinear(orig, rank, alpha, dropout)
+            setattr(attn, proj_name, lora_layer)
+            n_injected += 1
+    # Freeze all params, then unfreeze only LoRA
+    for p in model.parameters():
+        p.requires_grad_(False)
+    for layer in model.layers:
+        attn = layer.self_attn
+        for proj_name in ("q_proj", "v_proj"):
+            lora_layer = getattr(attn, proj_name)
+            lora_layer.lora_A.requires_grad_(True)
+            lora_layer.lora_B.requires_grad_(True)
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total     = sum(p.numel() for p in model.parameters())
+    print(f"  LoRA injected into {n_injected} projections. "
+          f"Trainable: {trainable:,} / {total:,} ({100*trainable/total:.2f}%)")
     return model
-
-
-def compute_delta_embeddings(model, alphabet, wt_seqs, mut_seqs, device,
-                              batch_size=8, max_len=1022):
-    """
-    Encode all WT and mut sequences, return delta = mut_mean - wt_mean.
-    Filters out variants with None sequences.
-    Returns (delta_embs, valid_mask).
-    """
-    import torch
-
-    valid_mask = np.array([w is not None and m is not None
-                           for w, m in zip(wt_seqs, mut_seqs)])
-    valid_wt  = [(str(i), wt_seqs[i])  for i in range(len(wt_seqs))  if valid_mask[i]]
-    valid_mut = [(str(i), mut_seqs[i]) for i in range(len(mut_seqs)) if valid_mask[i]]
-
-    wt_reps  = embed_sequences(model, alphabet, valid_wt,  device, batch_size, max_len)
-    mut_reps = embed_sequences(model, alphabet, valid_mut, device, batch_size, max_len)
-
-    delta = (mut_reps - wt_reps).cpu().numpy().astype(np.float32)
-    return delta, valid_mask
 
 
 def train_lora_fold(model, alphabet, wt_seqs, mut_seqs, labels, gene_pfam,
@@ -296,29 +307,14 @@ def train_lora_fold(model, alphabet, wt_seqs, mut_seqs, labels, gene_pfam,
                     seed=42):
     """
     Fine-tune ESM-2 with LoRA on training fold using cross-family contrastive loss.
-    Returns the fine-tuned model and delta embeddings for the full dataset.
+    Returns the fine-tuned model.
     """
-    import torch
-    import torch.nn as nn
-    from torch.utils.data import DataLoader, TensorDataset
-    from peft import get_peft_model, LoraConfig, TaskType
     import copy
+    from torch.utils.data import DataLoader, TensorDataset
 
-    # Get num_layers before wrapping (fair-esm uses .num_layers, not .config)
-    base_model = model
-    if hasattr(model, "base_model"):
-        base_model = model.base_model.model
-    num_layers = base_model.num_layers
+    num_layers = model.num_layers
 
-    lora_config = LoraConfig(
-        r=lora_rank,
-        lora_alpha=lora_alpha,
-        target_modules=["q_proj", "v_proj"],
-        lora_dropout=lora_dropout,
-        bias="none",
-        task_type=TaskType.FEATURE_EXTRACTION,
-    )
-    fold_model = get_peft_model(copy.deepcopy(base_model), lora_config)
+    fold_model = inject_lora(copy.deepcopy(model), lora_rank, lora_alpha, lora_dropout)
     fold_model = fold_model.to(device)
 
     optimizer = torch.optim.AdamW(
@@ -459,9 +455,7 @@ def extract_delta_embeddings(fold_model, alphabet, wt_seqs, mut_seqs, indices,
     batch_converter = alphabet.get_batch_converter()
     fold_model.eval()
 
-    # Get num_layers from base model (peft wraps it under .base_model.model)
-    base = fold_model.base_model.model if hasattr(fold_model, "base_model") else fold_model
-    num_layers = base.num_layers
+    num_layers = fold_model.num_layers
 
     all_deltas = []
     valid_flags = []
