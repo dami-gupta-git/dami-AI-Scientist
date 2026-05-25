@@ -181,12 +181,14 @@ def run_mlp_probe(X, labels, genes, n_folds=5, seed=42,
         X_val = (X_val - mu) / std
         X_te_norm = (X_te - mu) / std
 
-        # Class weights for imbalance
-        class_counts = np.bincount(y_fit, minlength=n_classes).astype(np.float32)
+        # Class weights from full training fold (y_tr), not the fit subset,
+        # to avoid weight explosion when a rare class is absent from y_fit.
+        class_counts = np.bincount(y_tr, minlength=n_classes).astype(np.float32)
         class_weights = torch.tensor(1.0 / (class_counts + 1e-8))
-        class_weights = class_weights / class_weights.sum()
 
-        model = _build_mlp(X_fit.shape[1], hidden, dropout, n_classes)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = _build_mlp(X_fit.shape[1], hidden, dropout, n_classes).to(device)
+        class_weights = class_weights.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-3)
         criterion = nn.CrossEntropyLoss(weight=class_weights)
 
@@ -200,6 +202,7 @@ def run_mlp_probe(X, labels, genes, n_folds=5, seed=42,
         for epoch in range(max_epochs):
             model.train()
             for xb, yb in fit_loader:
+                xb, yb = xb.to(device), yb.to(device)
                 optimizer.zero_grad()
                 loss = criterion(model(xb), yb)
                 loss.backward()
@@ -208,8 +211,8 @@ def run_mlp_probe(X, labels, genes, n_folds=5, seed=42,
             model.eval()
             with torch.no_grad():
                 val_loss = criterion(
-                    model(torch.tensor(X_val)),
-                    torch.tensor(y_val, dtype=torch.long)
+                    model(torch.tensor(X_val).to(device)),
+                    torch.tensor(y_val, dtype=torch.long).to(device)
                 ).item()
 
             if val_loss < best_val_loss - 1e-4:
@@ -226,8 +229,8 @@ def run_mlp_probe(X, labels, genes, n_folds=5, seed=42,
 
         model.eval()
         with torch.no_grad():
-            logits = model(torch.tensor(X_te_norm))
-            proba = torch.softmax(logits, dim=1).numpy()
+            logits = model(torch.tensor(X_te_norm).to(device))
+            proba = torch.softmax(logits, dim=1).cpu().numpy()
         pred = proba.argmax(1)
 
         fm = {"macro_f1": float(f1_score(y_te, pred, average="macro", zero_division=0))}
@@ -243,9 +246,8 @@ def run_mlp_probe(X, labels, genes, n_folds=5, seed=42,
         return {"error": "insufficient data"}
 
     agg = {}
-    for key in fold_results[0]:
-        if key == "epochs_run":
-            continue
+    all_keys = set().union(*[set(f.keys()) for f in fold_results]) - {"epochs_run"}
+    for key in all_keys:
         vals = [f[key] for f in fold_results if key in f and not np.isnan(f[key])]
         if vals:
             agg[f"{key}_mean"] = float(np.mean(vals))
