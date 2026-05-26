@@ -144,3 +144,15 @@ The variance across clans (std=0.076) is scientifically informative: mechanism i
 - `scripts/clan_holdout.py` — implementation
 - `results/20260524_baseline_run/run_0/clan_holdout_results_seed0.json` — full per-clan metrics
 - Pfam clan file: `Pfam-A.clans.tsv.gz` (Pfam current release, not committed — too large)
+
+---
+
+## Reconciliation note added 2026-05-26
+
+This result's mechanistic interpretation — "DN biology lives at the complex-assembly level, which ESM-2 cannot see from sequence" — motivated Experiment 11 (the proteome-features thread) under the hypothesis that interactome features like PPI_degree would recover the missing DN signal.
+
+That hypothesis is partially contradicted by result_13's T4 feature ablation. Dropping PPI_degree from V2 gives ΔF1 = −0.002 — PPI_degree contributes nothing to aggregate cross-family mechanism prediction. The DN AUROC lift in V2+bad (result 15) comes from constraint + Badonyi structural features, not from interactome biology.
+
+**Resolution via result_16:** the within-family LOGO analysis shows that the within-family mechanism signal lives in *family-residual* proteome features (gene minus family-mean on constraint, abundance, etc.) — not in absolute interactome degree. PPI_degree may carry within-family signal for specific architectures, but it doesn't move the cross-family aggregate metric. The clan-holdout finding here (some clans generalise, some don't) is consistent with the result_16 picture: within-family mechanism is partially learnable from gene-level variation, and the heterogeneity across clans reflects which families have meaningful within-family proteome variation.
+
+The "DN biology = complex assembly" interpretation in this result should be read as resolution-dependent: at the cross-family level, the signal that wins is constraint + Badonyi structural priors, not interactome topology. At the within-family level (result 16), the signal that wins is within-family proteome variation. The interactome-as-DN-signal claim does not survive the feature ablation in either resolution.

@@ -1,4 +1,4 @@
-ESM-2 frozen embeddings encode whether a mutation is damaging strongly (AUROC 0.88) but how it acts only weakly (macro-F1 ~0.36 above a trivial baseline of ~0.31). What looks like mechanism prediction in standard evaluations is mostly the model recognizing protein families; family-split cross-validation and a mut-only ≈ WT-only control are the tests that distinguish real mechanism signal from family-recognition leakage.
+ESM-2 frozen embeddings encode whether a mutation is damaging (delta MLP AUROC 0.74–0.88 across replications, family-split-stable in all; gene→family Δ ≈ 0 reproducibly across seeds) but how it acts only weakly (delta MLP family-split macro-F1 = 0.385 ± 0.018 on merged dataset 5-seed; 0.299 ± 0.034 on Gerasimavicius 5-seed). What looks like mechanism prediction in standard evaluations is mostly the model recognizing protein families; family-split cross-validation and a mut-only ≈ WT-only control are the tests that distinguish real mechanism signal from family-recognition leakage.
 
 # Publication plan — bioRxiv methods note with versioned releases
 
@@ -17,8 +17,8 @@ Results 1–10 established the ESM-2 sequence-embedding story. Results 11–16 e
 | 1–2 | Linear delta probe at chance; WT-only F1=0.58 but collapses under family-split | ✓ |
 | 3–5 | MLP lifts delta to F1=0.41 gene-split; partially leakage | ✓ |
 | 4 | ESM-2 clusters by Pfam (26× purity); 74.8% within-family mechanism agreement explains WT-only baseline | ✓ |
-| 6 | Pathogenicity positive control: same pipeline AUROC=0.88, family-split-stable (Δ=0.002). Pipeline is sound; mechanism null is real | ✓ |
-| 7 | Family-split floor ~0.35–0.39 across 6 (method × dataset × feature) combinations; 62% of gene-split signal is leakage on both datasets | ✓ |
+| 6 | Pathogenicity positive control: same pipeline AUROC = 0.878 (seed 0, RunPod variant set) / 0.742 ± 0.006 (seeds 1–4, locally-truncated variant set). Family-split-stable Δ ≈ 0 reproducibly across all seeds. Clean 5-seed mean is pending due to variant-set provenance issue. Pipeline is sound; mechanism null is real | ✓ 5 seeds (with variant-set caveat) |
+| 7 | Family-split floor F1 = 0.299 ± 0.034 (Gerasimavicius, 5-seed) / 0.385 ± 0.018 (merged, 5-seed). Seed 0 alone gave 0.364/0.352 — the multi-seed correction reveals the Gerasimavicius floor is lower than originally reported. Merged is the more reliable headline | ✓ 5 seeds |
 | 8 | Within-family ESM-2 delta signal: ion channels (PF00520) AUROC=0.659 (GOF/DN 2-class); doesn't generalise to related families | ✓ (single seed, small n) |
 | 9 | Contrastive projection (cross-family positives only) pushes family-split floor to F1=0.397; equal gene/family-split lift confirms real cross-family signal | ✓ |
 | 10 | Clan-holdout F1=0.299: ~half of family-split signal is clan memorisation, half is genuine. Cupin generalises (F1=0.536); ion channels collapse (F1=0.190) | ✓ (single seed) |
@@ -37,7 +37,7 @@ Results 1–10 established the ESM-2 sequence-embedding story. Results 11–16 e
 
 ## The story in one paragraph
 
-ESM-2 delta embeddings predict mutation pathogenicity strongly (AUROC 0.88, family-split-stable) but mechanism weakly (family-split floor F1~0.36). Sixty-two percent of the apparent gene-split mechanism signal is family-recognition leakage, quantified by ESM-2's strong Pfam clustering (26× purity) and 74.8% within-family mechanism agreement. Simple public gene-level features (proteome, V2) outperform ESM-2 by +0.08 F1; Badonyi's structural SVM (3 features) beats ESM-2 by +0.10; combining proteome + Badonyi achieves the project's best result (F1=0.511, DN AUROC=0.827). ESM-2 is the dispensable modality. Within protein families, the signal comes from within-family variation in gene-level proteome features (residual proteome F1=0.514), not from Badonyi's structural prior (which carries no within-family variation). For ion channels, however, ESM-2 mutation-level context (delta AUROC=0.659 within PF00520) outperforms gene-level features — pointing to a resolution-dependent split: cross-family mechanism is in gene-level biology, within-family mechanism in specific mutations.
+ESM-2 delta embeddings predict mutation pathogenicity (delta MLP AUROC 0.74–0.88 across replications, family-split-stable in all — gene→family Δ ≈ 0 reproducibly) but mechanism weakly (family-split floor F1 = 0.385 ± 0.018 on merged dataset 5-seed; 0.299 ± 0.034 on Gerasimavicius 5-seed). The mechanism null is explained by ESM-2's strong Pfam family clustering (26× purity) and 74.8% within-family mechanism agreement. Simple public gene-level features (proteome, V2) outperform ESM-2 by +0.08 F1; Badonyi's structural SVM (3 features) beats ESM-2 by +0.10; combining proteome + Badonyi achieves the project's best result (F1=0.511, DN AUROC=0.827). ESM-2 is the dispensable modality. Within protein families, the signal comes from within-family variation in gene-level proteome features (residual proteome F1=0.514), not from Badonyi's structural prior (which carries no within-family variation). For ion channels, however, ESM-2 mutation-level context (delta AUROC=0.659 within PF00520) outperforms gene-level features — pointing to a resolution-dependent split: cross-family mechanism is in gene-level biology, within-family mechanism in specific mutations.
 
 ---
 
@@ -48,7 +48,7 @@ ESM-2 delta embeddings predict mutation pathogenicity strongly (AUROC 0.88, fami
 
 ### Abstract (draft)
 
-Frozen ESM-2 embeddings encode mutation pathogenicity strongly (delta MLP AUROC 0.88, family-split-stable on 17,236 ClinVar pathogenic-vs-benign variants) but disease mechanism weakly (GOF AUROC 0.627 / 0.635 delta MLP family-split on Gerasimavicius / merged datasets respectively; macro-F1 floor 0.35–0.39 consistent across two datasets and two probe types). **The dissociation holds on the same embeddings, the same probe, and the same cross-validation scheme** — ruling out methodology as the explanation. 61–63% of the apparent above-chance gene-split mechanism signal is family-recognition leakage on both datasets — a structural property of standard CV designs on family-clustered disease gene sets. The strongest mechanism-class-level signal that survives family-split is GOF (delta MLP AUROC 0.63; WT-only linear AUROC 0.73–0.80 — though the WT-only number captures gene identity rather than mutation-specific information). DN and LOF do not exceed AUROC 0.55 and 0.69 respectively. Complementing ESMGain (Glaser et al. 2025), which shows fine-tuned ESM-2 captures GOF in DMS data, we show that the cross-family GOF signal exists in frozen embeddings — but is much smaller than gene-split evaluations suggest, and much smaller than what the same model encodes about damage. **Family-split CV is necessary to recover this dissociation; without it, gene-split evaluations inflate mechanism performance by ~62%.** This framework reconciles apparent positive counterexamples: reports of strong PLM-based mechanism prediction within restricted protein families (e.g., MissION on ion channels, AUROC 0.925) are consistent with our null because within a single Pfam family the family-identity signal that our family-split CV removes is precisely the signal those reports exploit. PLM-based mechanism prediction succeeds within any sufficiently homologous gene set and fails when cross-family generalisation is required.
+Frozen ESM-2 embeddings encode mutation pathogenicity (delta MLP AUROC 0.878 single-seed on 17,236 ClinVar pathogenic-vs-benign variants, 0.742 ± 0.006 under multi-seed replication on a slightly different variant set; gene→family Δ ≈ 0 reproducibly across seeds — family-split-stable in all configurations) but disease mechanism weakly (delta MLP family-split macro-F1 = 0.385 ± 0.018 on merged dataset 5-seed; 0.299 ± 0.034 on Gerasimavicius 5-seed; GOF AUROC 0.655 ± 0.014 / 0.557 ± 0.036 respectively). **The dissociation holds on the same embeddings, the same probe, and the same cross-validation scheme** — ruling out methodology as the explanation. The apparent above-chance gene-split mechanism signal is largely family-recognition leakage on both datasets — a structural property of standard CV designs on family-clustered disease gene sets. The strongest mechanism-class-level signal that survives family-split is GOF on the merged dataset (delta MLP AUROC 0.66; WT-only linear AUROC 0.73–0.80 — though the WT-only number captures gene identity rather than mutation-specific information). DN and LOF do not exceed AUROC 0.55 and 0.69 respectively. Complementing ESMGain (Glaser et al. 2025), which shows fine-tuned ESM-2 captures GOF in DMS data, we show that the cross-family GOF signal exists in frozen embeddings — but is much smaller than gene-split evaluations suggest, and much smaller than what the same model encodes about damage. **Family-split CV is necessary to recover this dissociation; without it, gene-split evaluations inflate mechanism performance materially.** This framework reconciles apparent positive counterexamples: reports of strong PLM-based mechanism prediction within restricted protein families (e.g., MissION on ion channels, AUROC 0.925) are consistent with our null because within a single Pfam family the family-identity signal that our family-split CV removes is precisely the signal those reports exploit. PLM-based mechanism prediction succeeds within any sufficiently homologous gene set and fails when cross-family generalisation is required.
 
 ### What's in v1
 
@@ -56,9 +56,9 @@ Frozen ESM-2 embeddings encode mutation pathogenicity strongly (delta MLP AUROC 
 |---|---|
 | Methods | ESM-2 650M, mean-pooled per-variant or per-gene embeddings, logistic regression + MLP probes, 5-fold gene-split AND family-split CV |
 | Dataset | Gerasimavicius (948 genes) + merged with G2P/ClinVar pathogenic (1,985 genes total) + ClinVar 17,236 pathogenic/benign variants (944 genes) for the pathogenicity task |
-| **Co-headline 1 — Pathogenicity** | **Delta MLP AUROC 0.88, family-split-stable (gene-split → family-split Δ = 0.002). Linear probe is sufficient. Confirms ESM-2 deltas carry strong per-variant damage signal.** |
-| **Co-headline 2 — Mechanism** | **Delta MLP family-split macro-F1 0.36 (Gerasimavicius) / 0.35 (merged). GOF AUROC 0.627 / 0.635. DN and LOF do not exceed AUROC 0.55 and 0.69. The 0.35–0.39 floor replicates across 6 (probe × feature × dataset) combinations.** |
-| **The dissociation** | **Same embeddings, same probe family, same CV scheme — pathogenicity AUROC 0.88 vs mechanism above-chance gain of ~0.06 macro-F1. The dissociation is the central finding.** |
+| **Co-headline 1 — Pathogenicity** | **Delta MLP AUROC 0.878 (seed 0) / 0.742 ± 0.006 (seeds 1–4, slightly different variant set); family-split-stable in all configurations (gene→family Δ ≈ 0 across all seeds). Clean 5-seed mean on a consistent variant set is pending. Linear probe is sufficient. Confirms ESM-2 deltas carry per-variant damage signal that survives strict holdout regardless of which variant set is used.** |
+| **Co-headline 2 — Mechanism** | **Delta MLP family-split macro-F1 = 0.385 ± 0.018 (merged, 5-seed — primary headline) / 0.299 ± 0.034 (Gerasimavicius, 5-seed — replication). GOF AUROC 0.655 ± 0.014 / 0.557 ± 0.036. DN and LOF do not exceed AUROC 0.59 and 0.67. 62.8% leakage fraction exact and seed-invariant on Gerasimavicius (structural property of the dataset).** |
+| **The dissociation** | **Same embeddings, same probe family, same CV scheme — pathogenicity AUROC 0.74–0.88 vs mechanism floor F1 ≈ 0.30–0.39 (above the majority baseline by 0.02–0.07 depending on dataset). The dissociation is the central finding and is family-split-stable on both sides.** |
 | Supporting methodology | **The leakage diagnostic**: 61–63% of above-chance gene-split mechanism signal is family-recognition leakage on both datasets. |
 | **Reconciling MissION** | PLM mechanism prediction succeeds within homologous subfamilies and fails cross-family. The two findings are consistent, not contradictory. Falsifiable rule: *if a PLM mechanism predictor can't demonstrate performance under family-split CV, it has measured family recognition, not mechanism.* |
 | Per-class table | GOF / DN / LOF AUROC under gene-split and family-split CV, both datasets. WT-only included as a contrast. |
@@ -77,8 +77,8 @@ Frozen ESM-2 embeddings encode mutation pathogenicity strongly (delta MLP AUROC 
 ### Why v1 is safe to post
 
 - The dissociation is controlled by experimental design: same embeddings, same probe family, same CV scheme, two tasks, opposite outcomes.
-- Two-dataset replication of the mechanism floor (Gerasimavicius F1=0.364; merged F1=0.352).
-- Universal 61–63% leakage fraction across datasets.
+- Two-dataset replication of the mechanism floor (5-seed mean ± std): Gerasimavicius F1 = 0.299 ± 0.034, merged F1 = 0.385 ± 0.018. Merged is the more stable headline (lower std); Gerasimavicius result tightens around a lower floor than the seed-0 number originally suggested.
+- Substantial gene-split → family-split drop on both datasets (the leakage diagnostic is real; the exact percentage shifts under multi-seed but the directional finding holds).
 - Convergence across 6 (method × dataset × feature) combinations all in the 0.34–0.39 band.
 - MissION reconciliation addresses the strongest apparent counterexample.
 - Reproducibility: link to `esm2_mechanism/` scripts and JSON outputs.
@@ -134,7 +134,7 @@ The specific frozen-mean-pool + linear-probe + family-split setup is novel. v1 i
 
 ### Updated story for v2
 
-> ESM-2 delta embeddings predict mutation pathogenicity (AUROC 0.88, family-split-stable) but not mechanism (family-split floor F1~0.36). The mechanism null is explained by ESM-2's strong Pfam family clustering (26× purity) and 74.8% within-family mechanism agreement. When the same mechanism prediction task is given to either (a) simple public gene-level features or (b) Badonyi's structural SVM (3 features), both outperform the 1,280-dimensional frozen ESM-2 embeddings — the former by capturing gene-level biology (constraint, paralogs, abundance) and the latter by capturing structural geometry (variant clustering, interface exposure, FoldX ΔΔG). Combining proteome + Badonyi achieves the best results (F1=0.511, DN AUROC=0.827). ESM-2 is redundant once the other modalities are present. This sharpens the central claim: frozen ESM-2 lacks not just mechanism signal in general, but specifically the structural geometric information that best distinguishes mechanism classes.
+> ESM-2 delta embeddings predict mutation pathogenicity (AUROC 0.74–0.88 across replications, family-split-stable in all — gene→family Δ ≈ 0 reproducibly) but not mechanism (family-split floor F1 = 0.385 ± 0.018 merged 5-seed, 0.299 ± 0.034 Gerasimavicius 5-seed). The mechanism null is explained by ESM-2's strong Pfam family clustering (26× purity) and 74.8% within-family mechanism agreement. When the same mechanism prediction task is given to either (a) simple public gene-level features or (b) Badonyi's structural SVM (3 features), both outperform the 1,280-dimensional frozen ESM-2 embeddings — the former by capturing gene-level biology (constraint, paralogs, abundance) and the latter by capturing structural geometry (variant clustering, interface exposure, FoldX ΔΔG). Combining proteome + Badonyi achieves the best results (F1=0.511, DN AUROC=0.827). ESM-2 is redundant once the other modalities are present. This sharpens the central claim: frozen ESM-2 lacks not just mechanism signal in general, but specifically the structural geometric information that best distinguishes mechanism classes.
 
 ### What v2's title becomes
 *"Frozen ESM-2 encodes pathogenicity but not mechanism: family-split CV as a leakage diagnostic and structural priors as the missing modality"*
@@ -183,11 +183,12 @@ bioRxiv versions are a public scientific record. v1 scope is a strict subset of 
 
 ### What stays the same across all versions
 
-- The GOF AUROC 0.73–0.80 family-split number (WT-only) and 0.627/0.635 (delta)
+- The GOF AUROC 0.73–0.80 family-split number (WT-only); delta MLP GOF AUROC 0.557 ± 0.036 (Gerasimavicius) / 0.655 ± 0.014 (merged) under multi-seed
 - The DN/LOF chance-level family-split numbers from ESM-2 delta
-- The pathogenicity AUROC 0.88 positive control
-- The 62% leakage fraction
-- The proteome > ESM-2 ordering (V2 F1=0.462 vs V1 F1=0.382)
+- The pathogenicity gene→family Δ ≈ 0 (family-split stability) reproducibly across all seeds and variant sets
+- The pathogenicity AUROC in the 0.74–0.88 range across replications (clean 5-seed mean pending consistent-variant-set replication)
+- The 62.8% leakage fraction on Gerasimavicius (exact, seed-invariant — structural property of the dataset)
+- The proteome > ESM-2 ordering (V2 F1=0.462 vs V1 F1=0.382, 5 seeds)
 - The Badonyi > proteome > ESM-2 ordering (V_bad 0.484 > V2 0.462 > V1 0.380)
 
 ### What might change across versions

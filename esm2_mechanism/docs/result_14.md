@@ -215,3 +215,15 @@ The answer is a qualified yes, driven almost entirely by a single gene property:
 The multi-feature model adds no aggregate benefit over paralog count alone, the predictions at any operating threshold are poor (recovering only 4 of 17 GOF outlier genes with 21 false positives), and the probability estimates are miscalibrated. The result clears the pre-registered INFORMATIVE threshold on its point estimate, but the confidence intervals are wide enough to include chance performance.
 
 The clinically useful takeaway is narrower than the plan anticipated: **paralog count is a simple, interpretable, free predictor of GOF direction within haploinsufficient genes**, and deserves further investigation in that framing — not as part of a black-box multi-feature model.
+
+---
+
+## Reconciliation note added 2026-05-26
+
+Result_13's T4 feature ablation found paralog_count contributes ΔF1 = +0.002 to V2's aggregate macro-F1 — essentially nothing. Why does paralog_count then beat the 37-feature model within HI=3 here (AUROC 0.746 vs 0.650)?
+
+The two findings are consistent, not contradictory. Result_13 evaluates V2 on the full labeled set (1,699 genes across all mechanism classes) where the dominant features are constraint and dosage. Paralog_count contributes a small DN-specific signal that gets averaged out across classes — confirmed by result_13's per-class ablation showing ΔDN = −0.015 when paralogs are dropped (paralogs help DN slightly when present).
+
+This result evaluates a *subset selected for being constrained and dosage-sensitive*: ClinGen HI=3 by definition selects high-pLI genes. Within that subset, constraint and dosage are pinned at chance by construction (pLI AUROC = 0.49 within HI=3). The residual signal is what's left after subtracting the dominant features — and paralog_count is the cleanest residual predictor. The gene balance hypothesis explains why: HI=3 genes with many paralogs are mechanistically unusual cases (paralog dosage redundancy should buffer them against HI; if they're nonetheless classified HI=3, the mechanism is more likely activating).
+
+So: paralog_count contributes nothing to *aggregate* mechanism prediction (constraint and dosage dominate there), and dominates within *HI=3* (constraint and dosage are tautologically uninformative within that subset, leaving paralog_count as the strongest remaining signal). The two findings together support a sharper biological claim: paralog_count is a context-specific predictor that matters only when other dominant features have been controlled for.
