@@ -7,7 +7,7 @@
 
 ## TL;DR
 
-The same ESM-2 delta embeddings (mutant − WT) that classify GOF / DN / LOF at chance (macro-F1 0.28, result_4) predict ClinVar pathogenic vs benign at **AUROC 0.88** on 17,236 variants across 944 genes. The pathogenicity signal is **identical under gene-split and family-split CV** (Δ = 0.006), confirming it is per-variant biochemistry rather than homology leakage. Conclusion: **ESM-2 encodes whether a mutation is damaging, but not how it acts.** The mechanism null in result_4 is therefore a real absence of mechanism signal in ESM-2 deltas, not a pipeline failure.
+The same ESM-2 delta embeddings (mutant − WT) that classify GOF / DN / LOF at chance (macro-F1 0.28, result_4) predict ClinVar pathogenic vs benign at **MLP AUROC 0.886 ± 0.001** (5-seed replication, 16,576 variants, 943 genes — see Part 2). The pathogenicity signal is **identical under gene-split and family-split CV** (Δ = 0.002 ± 0.002), confirming it is per-variant biochemistry rather than homology leakage. Conclusion: **ESM-2 encodes whether a mutation is damaging, but not how it acts.** The mechanism null in result_4 is therefore a real absence of mechanism signal in ESM-2 deltas, not a pipeline failure.
 
 ## Purpose
 
