@@ -2,17 +2,17 @@
 
 ## Numbering note
 
-The ClinVar-pattern analysis (perturbation_pattern.py, results in `results/perturbation_pattern/`) has not yet been written up as a result file. It should be written as `docs/result_18.md` (result_17.md is already taken by the AlphaMissense analysis). This plan references that work as **result_18**. Do not write result_18.md until the numbering is confirmed.
+The ClinVar-pattern analysis (perturbation_pattern.py) is written up as `docs/result_19.md` (result_17 = AlphaMissense ClinVar, result_18 = AlphaMissense ProteinGym). This plan references that work as **result_19**. The in-silico scan result will be **result_20** if it passes the decision rules.
 
 ---
 
 ## The finding that motivates this
 
-**result_18** (perturbation_pattern.py) showed that the *spatial pattern* of observed clinical variant deltas across a gene's sequence carries mechanism signal that survives family-split CV. Eight scalar features derived from how variants cluster in ESM-2 embedding space push GOF AUROC from 0.578 to 0.646 and combined F1 from 0.331 to 0.399 under family-split — with almost no leakage (gene-split ≈ family-split for the scalar features).
+**result_19** (perturbation_pattern.py) showed that the *spatial pattern* of observed clinical variant deltas across a gene's sequence carries mechanism signal that survives family-split CV. Eight scalar features derived from how variants cluster in ESM-2 embedding space push GOF AUROC from 0.578 to 0.646 and combined F1 from 0.331 to 0.399 under family-split — with almost no leakage (gene-split ≈ family-split for the scalar features).
 
 The biological reason: GOF mutations have to hit specific hotspots (KRAS G12, BRAF V600) to flip a protein from off to on. LOF mutations can break the protein anywhere. DN mutations cluster at interfaces. This hotspot-vs-spread distinction shows up in ESM-2 perturbation space.
 
-## The problem with result_18
+## The problem with result_19
 
 The pattern features are built from clinical variants in ClinVar/Gerasimavicius. This has two problems:
 
@@ -67,15 +67,15 @@ All thresholds set before Phase 2 runs.
 
 | Gate | Threshold | Interpretation |
 |---|---|---|
-| G1: scan-only vs result_18 ClinVar-pattern baseline | Scan F1 > 0.348 + **0.02** = **0.368** | Unbiased scan adds meaningful signal over clinical variant pattern |
-| G2: scan + delta vs result_18 combined baseline | Combined F1 > 0.399 + **0.02** = **0.419** | Scan adds beyond mean-pooled delta when combined |
+| G1: scan-only vs result_19 ClinVar-pattern baseline | Scan F1 > 0.348 + **0.02** = **0.368** | Unbiased scan adds meaningful signal over clinical variant pattern |
+| G2: scan + delta vs result_19 combined baseline | Combined F1 > 0.399 + **0.02** = **0.419** | Scan adds beyond mean-pooled delta when combined |
 | G3: scan + proteome vs proteome alone | Combined F1 > 0.385 + **0.02** = **0.405** | Scan adds beyond proteome features |
 
 A +0.005 lift technically passes but should be treated as noise. The +0.02 threshold is the minimum to be scientifically interesting at this sample size (n~1,985 genes, 5-fold family-split).
 
 If G1 fails: scan features don't improve on the ClinVar-pattern baseline — stop, do not proceed to G2/G3.
 If G1 passes but G3 fails: scan adds to the delta baseline but not beyond proteome — report as a methodological curiosity, not a practical advance.
-If G3 passes: scan features are a useful addition to the best current model — write up as result_19.
+If G3 passes: scan features are a useful addition to the best current model — write up as result_20.
 
 ---
 
@@ -110,7 +110,7 @@ Write `scripts/perturbation_scan.py`:
 - Check decision rules G1–G3
 - If G1 passes: per-class breakdown (which mechanism benefits most?)
 - Feature importance from logistic regression coefficients
-- Write result_19.md if G3 passes; add a note to result_18.md otherwise
+- Write result_20.md if G3 passes; add a note to result_19.md otherwise
 
 ---
 
@@ -124,10 +124,10 @@ sequences.json has 948 Gerasimavicius genes. The merged dataset has 1,985 genes;
 
 | File | Status |
 |---|---|
-| `scripts/perturbation_pattern.py` | ✓ exists — ClinVar-pattern analysis (result_18) |
+| `scripts/perturbation_pattern.py` | ✓ exists — ClinVar-pattern analysis (result_19) |
 | `results/perturbation_pattern/results.json` | ✓ exists |
-| `docs/result_18.md` | ✗ not yet written |
+| `docs/result_19.md` | ✓ written |
 | `scripts/perturbation_scan.py` | ✗ to be written (Phase 1) |
 | `data/scan_features_1985genes.npy` | ✗ Phase 2 output |
 | `results/perturbation_scan/` | ✗ Phase 3 output |
-| `docs/result_19.md` | ✗ written only if G3 passes |
+| `docs/result_20.md` | ✗ written only if G3 passes |
