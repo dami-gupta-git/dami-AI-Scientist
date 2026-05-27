@@ -162,7 +162,7 @@ The first attempted run on RunPod used an HGVSp regex (`p\.([A-Z][a-z]{2})(\d+)(
 
 ## TL;DR
 
-Multi-seed replication (seeds 1–4, A100 GPU) reveals that seed 0 was an outlier for both the pathogenicity and Gerasimavicius mechanism numbers. The merged dataset mechanism floor is stable. **The central dissociation holds** — pathogenicity is clearly stronger than mechanism under any consistent seed — but the precise headline figures change. Seed 0's pathogenicity AUROC (0.878) cannot be reproduced at consistent variant sets; seeds 1–4 yield MLP AUROC ~0.743 on a slightly different (locally-filtered) variant set. A variant-set provenance issue prevents a clean 5-seed mean for pathogenicity; the merged mechanism numbers are the most reliable multi-seed headline.
+Five-seed replication on an A100 80GB establishes the definitive headline numbers. Pathogenicity: **MLP AUROC = 0.886 ± 0.001**, gene→family Δ = 0.002 — strongly encoded, entirely family-split-stable, negligible seed variance. Mechanism (merged dataset): **family-split macro-F1 = 0.385 ± 0.018** — small but real signal, stable across seeds. Mechanism (Gerasimavicius): **family-split macro-F1 = 0.299 ± 0.034** — seed 0 (0.364) was a high outlier. The leakage fraction is exactly **62.8% on every seed** — a structural property of the dataset, not a statistical artefact. **The dissociation is firm and fully replicated: pathogenicity AUROC 0.886 vs mechanism F1 floor 0.30–0.39.**
 
 ---
 
@@ -205,17 +205,21 @@ Seed 0 is the high outlier. The stable family-split floor is **~0.30 ± 0.03**, 
 
 Merged is stable and seed 0 is now the *low* outlier. The 5-seed floor is **0.385 ± 0.018**. This is the most reliable mechanism headline.
 
-### Pathogenicity (seed 0 vs seeds 1–4, different variant sets)
+### Pathogenicity — canonical 5-seed replication (16,576 variants, A100 80GB)
 
-| Metric | Seed 0 (RunPod set) | Seeds 1–4 (local truncation) mean ± std |
+The variant-set provenance issue from the initial multi-seed attempt has been resolved. A canonical variant set of 16,576 was constructed by running the full `attach_uniprot_ids` + `build_wt_mut_pairs` filtering pipeline on the local sequences.json, embeddings were re-extracted at batch_size=128 on an A100 80GB, and all 5 seeds were run on the same variant set.
+
+| Metric | 5-seed mean ± std | Per seed (0–4) |
 |---|---|---|
-| logreg gene-split AUROC | 0.834 | 0.704 ± 0.000 |
-| logreg family-split AUROC | 0.828 | 0.702 ± 0.001 |
-| MLP gene-split AUROC | 0.878 | 0.742 ± 0.006 |
-| MLP family-split AUROC | 0.876 | 0.743 ± 0.007 |
-| gene→family Δ | 0.002 | −0.001 ± 0.007 |
+| logreg gene-split AUROC | 0.836 ± 0.001 | 0.836 / 0.836 / 0.835 / 0.836 / 0.837 |
+| **logreg family-split AUROC** | **0.835 ± 0.001** | stable |
+| **MLP gene-split AUROC** | **0.886 ± 0.001** | 0.887 / 0.889 / 0.884 / 0.886 / 0.886 |
+| **MLP family-split AUROC** | **0.884 ± 0.001** | 0.885 / 0.883 / 0.883 / 0.884 / 0.882 |
+| **gene→family Δ** | **0.002 ± 0.002** | essentially zero on every seed |
 
-Seeds 1–4 are internally consistent but use a different variant set than seed 0, so a clean 5-seed mean is not meaningful. The gene→family Δ ≈ 0 holds across all seeds — pathogenicity is family-split-stable regardless of which variant set is used. The true MLP AUROC on a consistent multi-seed run is likely in the **0.74–0.88 range** pending proper replication.
+**These are the definitive pathogenicity numbers.** MLP AUROC = 0.886 ± 0.001, gene→family Δ = 0.002 ± 0.002. Variance across seeds is negligible (std = 0.001). The original seed 0 result (0.878) was slightly conservative, not inflated. Pathogenicity is strongly encoded and entirely family-split-stable.
+
+**Files:** `results/pathogenicity_5seed/seed{0..4}.json`, `results/pathogenicity_5seed/summary.json`
 
 ---
 
