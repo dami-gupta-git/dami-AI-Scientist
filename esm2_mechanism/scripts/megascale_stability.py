@@ -300,30 +300,6 @@ def cluster_split_cv(proteins, cluster_map, n_folds=5, seed=42):
 # Ridge regression probe
 # ---------------------------------------------------------------------------
 
-def run_ridge(X, y, splits):
-    rhos, rs = [], []
-    for tr, te in splits:
-        sc = StandardScaler()
-        Xtr = sc.fit_transform(X[tr])
-        Xte = sc.transform(X[te])
-        clf = Ridge(alpha=1.0)
-        clf.fit(Xtr, y[tr])
-        pred = clf.predict(Xte)
-        rho, _ = spearmanr(y[te], pred)
-        r, _   = pearsonr(y[te], pred)
-        rhos.append(float(rho))
-        rs.append(float(r))
-    if not rhos:
-        return {}
-    return {
-        "spearman_mean": float(np.mean(rhos)),
-        "spearman_std":  float(np.std(rhos)),
-        "pearson_mean":  float(np.mean(rs)),
-        "pearson_std":   float(np.std(rs)),
-        "n_folds": len(rhos),
-    }
-
-
 def auroc_at_median(y_true, y_pred):
     """Binary AUROC: above-median = positive."""
     med = np.median(y_true)

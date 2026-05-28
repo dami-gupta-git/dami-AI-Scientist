@@ -37,9 +37,9 @@ from pathlib import Path
 
 import numpy as np
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from utils_probes import compute_metrics, align_proba
 import functools
 print = functools.partial(print, flush=True)
 
@@ -166,13 +166,8 @@ def logo_cv(X: np.ndarray, y: np.ndarray, gene_names: list[str],
         except Exception:
             continue
 
-        proba_raw = clf.predict_proba(sc.transform(X_te))
-        # Align to CLASSES order
-        proba = np.zeros((1, len(CLASSES)), dtype=np.float32)
-        le_classes = list(clf.classes_)
-        for ci, c in enumerate(le_classes):
-            if c < len(CLASSES):
-                proba[0, c] = proba_raw[0, ci]
+        proba = align_proba(clf.predict_proba(sc.transform(X_te)),
+                            clf.classes_, len(CLASSES))
 
         all_true.append(y_te[0])
         all_pred.append(int(proba.argmax()))
@@ -184,19 +179,6 @@ def logo_cv(X: np.ndarray, y: np.ndarray, gene_names: list[str],
     return (np.array(all_true), np.array(all_pred),
             np.stack(all_proba))
 
-
-def compute_metrics(y_true, y_pred, y_proba) -> dict:
-    if len(y_true) == 0:
-        return {"macro_f1": None, "per_class_auroc": {c: None for c in CLASSES}, "n": 0}
-    macro_f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
-    auroc = {}
-    for i, cls in enumerate(CLASSES):
-        y_bin = (y_true == i).astype(int)
-        if y_bin.sum() == 0 or y_bin.sum() == len(y_bin):
-            auroc[cls] = None
-        else:
-            auroc[cls] = float(roc_auc_score(y_bin, y_proba[:, i]))
-    return {"macro_f1": macro_f1, "per_class_auroc": auroc, "n": int(len(y_true))}
 
 
 def run_feature_set(

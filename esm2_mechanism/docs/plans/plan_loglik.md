@@ -2,7 +2,7 @@
 
 ## Numbering note
 
-This experiment follows result_20 (in-silico embedding scan). If it passes decision rules it will be written up as **result_21**.
+This experiment follows result_20 (in-silico embedding scan). result_21 is already taken (Megascale stability positive control). If this passes decision rules it will be written up as **result_22**.
 
 ---
 
@@ -131,4 +131,4 @@ Write `scripts/ll_scan.py`:
 | `data/ll_features.npy` | ✗ Phase 2 output |
 | `data/ll_features_meta.json` | ✗ Phase 2 output |
 | `results/ll_scan/probe_results.json` | ✗ Phase 3 output |
-| `docs/result_21.md` | ✗ written only if passes decision rules |
+| `docs/result_22.md` | ✗ written only if passes decision rules |

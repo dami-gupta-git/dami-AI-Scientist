@@ -18,7 +18,8 @@ OUT  = os.path.join(ROOT, "results", "pathogenicity_5seed")
 os.makedirs(OUT, exist_ok=True)
 
 from experiment import window_sequence, apply_missense, get_esm2_embeddings_for_pairs, ESM2_MODEL_650M
-from multiseed_v1 import gene_split_cv, family_split_cv, run_logreg_binary, run_mlp_binary
+from multiseed_v1 import gene_split_cv, family_split_cv, run_mlp_binary
+from utils_probes import run_logreg_binary_cv as run_logreg_binary
 import functools
 print = functools.partial(print, flush=True)
 

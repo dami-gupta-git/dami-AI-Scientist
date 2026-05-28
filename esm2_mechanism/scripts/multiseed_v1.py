@@ -28,6 +28,9 @@ import numpy as np
 from collections import defaultdict
 import functools
 print = functools.partial(print, flush=True)
+from utils_probes import (
+    gene_split_cv, family_split_cv, run_logreg_binary_cv,
+)
 
 # ── paths ────────────────────────────────────────────────────────────────────
 
@@ -58,32 +61,6 @@ PATH_VARIANTS = os.path.join(DATA_DIR, "clinvar_pathogenicity_variants.json")
 
 
 # ── CV helpers ───────────────────────────────────────────────────────────────
-
-def gene_split_cv(genes, n_folds=5, seed=42):
-    u = np.array(sorted(set(genes)))
-    np.random.RandomState(seed).shuffle(u)
-    splits = []
-    for fold in np.array_split(u, n_folds):
-        tr = np.where(~np.isin(genes, fold))[0]
-        te = np.where( np.isin(genes, fold))[0]
-        if len(tr) >= 10 and len(te) >= 5:
-            splits.append((tr, te))
-    return splits
-
-
-def family_split_cv(genes, pfam_map, n_folds=5, seed=42):
-    g2p = {g: pfam_map[g] for g in np.unique(genes) if pfam_map.get(g)}
-    fams = np.array(sorted(set(g2p.values())))
-    np.random.RandomState(seed).shuffle(fams)
-    n = len(genes)
-    splits = []
-    for fold_fams in np.array_split(fams, n_folds):
-        fs = set(fold_fams)
-        te = np.array([genes[i] in g2p and g2p[genes[i]] in fs  for i in range(n)])
-        tr = np.array([genes[i] in g2p and g2p[genes[i]] not in fs for i in range(n)])
-        if tr.sum() >= 10 and te.sum() >= 5:
-            splits.append((np.where(tr)[0], np.where(te)[0]))
-    return splits
 
 
 # ── MLP probe (PyTorch) ──────────────────────────────────────────────────────
@@ -187,25 +164,6 @@ def run_mlp_probe(X, labels, splits, seed=42, hidden=(256, 64), dropout=0.3,
 
 
 # ── Logistic regression probe (binary, for pathogenicity) ────────────────────
-
-def run_logreg_binary(X, y, splits, seed=42):
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.metrics import roc_auc_score
-    aurocs = []
-    for tr, te in splits:
-        sc = StandardScaler()
-        Xtr = sc.fit_transform(X[tr]); Xte = sc.transform(X[te])
-        if len(set(y[tr])) < 2 or len(set(y[te])) < 2:
-            continue
-        clf = LogisticRegression(max_iter=1000, C=1.0, random_state=seed)
-        clf.fit(Xtr, y[tr])
-        proba = clf.predict_proba(Xte)[:, list(clf.classes_).index(1)]
-        aurocs.append(float(roc_auc_score(y[te], proba)))
-    if not aurocs:
-        return {}
-    return {"auroc_mean": float(np.mean(aurocs)), "auroc_std": float(np.std(aurocs)),
-            "n_folds": len(aurocs)}
 
 
 def run_mlp_binary(X, y, splits, seed=42):
@@ -374,9 +332,9 @@ def run_seed(seed, pfam_map, out_dir):
         fs = family_split_cv(genes, pfam_map, seed=seed)
         path_results = {}
         print(f"  logreg gene-split")
-        path_results["logreg_gene"] = run_logreg_binary(delta, y, gs, seed=seed)
+        path_results["logreg_gene"] = run_logreg_binary_cv(delta, y, gs, seed=seed)
         print(f"  logreg family-split")
-        path_results["logreg_family"] = run_logreg_binary(delta, y, fs, seed=seed)
+        path_results["logreg_family"] = run_logreg_binary_cv(delta, y, fs, seed=seed)
         print(f"  MLP gene-split")
         path_results["mlp_gene"] = run_mlp_binary(delta, y, gs, seed=seed)
         print(f"  MLP family-split")

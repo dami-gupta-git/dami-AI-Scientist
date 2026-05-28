@@ -32,6 +32,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from utils_probes import (
+    family_split_indices, compute_metrics, aggregate_folds, align_proba,
+)
 import functools
 print = functools.partial(print, flush=True)
 
@@ -58,20 +61,6 @@ PFAM_FAMILIES = DATA_DIR / "pfam_families.json"
 
 CLASSES = ["GOF", "DN", "LOF"]
 
-# ---------------------------------------------------------------------------
-# CV helpers (copied from proteome_mechanism.py)
-# ---------------------------------------------------------------------------
-
-def family_split_indices(groups: np.ndarray, n_folds: int, seed: int):
-    rng = np.random.RandomState(seed)
-    unique_fams = np.array(sorted(f for f in set(groups) if f is not None))
-    rng.shuffle(unique_fams)
-    fam_fold = {f: i % n_folds for i, f in enumerate(unique_fams)}
-    fold_of = np.array([fam_fold[g] for g in groups])
-    for k in range(n_folds):
-        test = np.where(fold_of == k)[0]
-        train = np.where(fold_of != k)[0]
-        yield train, test
 
 
 # ---------------------------------------------------------------------------
@@ -122,38 +111,6 @@ def broadcast_gene_features(genes: np.ndarray, matrix: np.ndarray,
 
 
 # ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
-
-def compute_metrics(y_true, y_pred, y_proba) -> dict:
-    macro_f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
-    auroc: dict[str, float | None] = {}
-    for i, cls in enumerate(CLASSES):
-        y_bin = (y_true == i).astype(int)
-        if y_bin.sum() == 0 or y_bin.sum() == len(y_bin):
-            auroc[cls] = None
-        else:
-            auroc[cls] = float(roc_auc_score(y_bin, y_proba[:, i]))
-    return {"macro_f1": macro_f1, "per_class_auroc": auroc}
-
-
-def aggregate_folds(fold_list: list[dict]) -> dict:
-    if not fold_list:
-        return {"error": "no folds"}
-    out: dict = {}
-    vals = [f["macro_f1"] for f in fold_list]
-    out["macro_f1_mean"] = float(np.mean(vals))
-    out["macro_f1_std"] = float(np.std(vals))
-    for cls in CLASSES:
-        v = [f["per_class_auroc"][cls] for f in fold_list
-             if f["per_class_auroc"].get(cls) is not None]
-        out[f"auroc_{cls}_mean"] = float(np.mean(v)) if v else None
-        out[f"auroc_{cls}_std"] = float(np.std(v)) if v else None
-    out["n_folds"] = len(fold_list)
-    return out
-
-
-# ---------------------------------------------------------------------------
 # Per-gene T2 scoring (aggregate variant-level proba → gene-level)
 # ---------------------------------------------------------------------------
 
@@ -180,14 +137,6 @@ def per_gene_f1(y_true_variants: np.ndarray,
 # Runners
 # ---------------------------------------------------------------------------
 
-def _align_proba(proba, clf_classes):
-    proba_aligned = np.zeros((len(proba), len(CLASSES)), dtype=np.float32)
-    for ci, c in enumerate(list(clf_classes)):
-        if c < len(CLASSES):
-            proba_aligned[:, c] = proba[:, ci]
-    return proba_aligned
-
-
 def run_logreg_family_split(X, y, genes, groups, n_folds, seed, label) -> dict:
     fold_results, per_gene_f1s = [], []
     for fold_i, (tr, te) in enumerate(family_split_indices(groups, n_folds, seed)):
@@ -201,7 +150,7 @@ def run_logreg_family_split(X, y, genes, groups, n_folds, seed, label) -> dict:
         clf = LogisticRegression(max_iter=2000, class_weight="balanced",
                                  random_state=seed)
         clf.fit(sc.transform(X_tr), y_tr)
-        proba = _align_proba(clf.predict_proba(sc.transform(X_te)), clf.classes_)
+        proba = align_proba(clf.predict_proba(sc.transform(X_te)), clf.classes_, len(CLASSES))
         pred = proba.argmax(axis=1)
         fm = compute_metrics(y_te, pred, proba)
         fold_results.append(fm)
@@ -252,7 +201,7 @@ def run_mlp_family_split(X, y, genes, groups, hidden, n_folds, seed, label) -> d
                             early_stopping=True, validation_fraction=0.15,
                             random_state=seed)
         clf.fit(X_tr_s[os_idx], y_tr[os_idx])
-        proba = _align_proba(clf.predict_proba(X_te_s), clf.classes_)
+        proba = align_proba(clf.predict_proba(X_te_s), clf.classes_, len(CLASSES))
         pred = proba.argmax(axis=1)
         fm = compute_metrics(y_te, pred, proba)
         fold_results.append(fm)

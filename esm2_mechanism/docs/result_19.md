@@ -73,6 +73,20 @@ Combined (scalar + mean-pooled delta) reaches family-split F1 = 0.399 ± 0.014 �
 
 The pattern features are built from the clinical variants that happen to appear in the dataset. Genes with many variants (SCN1A: 373, KCNQ2: 214) get a meaningful spatial pattern; genes with 2–3 variants get noise. More importantly, ClinVar variants are enriched for known hotspots — the observed clustering is partly circular. This motivates result_20 (plan_perturb.md): a systematic in-silico scan replacing clinical variants with 100 evenly-spaced positions × 3 probe amino acids per gene.
 
+#### How the bias actually leaks into the model (plain-language)
+
+It is worth being explicit about the mechanism, because it is not obvious.
+
+ESM-2 is **not** the source of the bias. ESM-2 is trained on raw natural protein sequences and knows nothing about patients, diseases, or which mutations have been studied. In this analysis it is only a *measuring tool* — it tells us how disruptive a mutation at a given position is. The bias enters **before** ESM-2, in our choice of *which positions to feed it*. We only looked where ClinVar pointed, and ClinVar points at the famous, well-studied spots.
+
+The bias then rides into the model through the **feature values themselves** — two channels in particular:
+
+1. **`n_variants_log` is literally a "how much was this gene studied" counter.** A famous gene has hundreds of reported variants; an obscure one has three. This feature is essentially a popularity score, not biology. (Flagged again under Limitations.)
+
+2. **The clustering/spread features (`delta_mag_cv`, `pos_std_norm`) are shaped by sampling, not only biology.** A heavily-studied GOF gene has the *same hotspot mutation reported hundreds of times* → the positions look tightly clustered. A lightly-studied gene has a few scattered reports → the positions look spread out. So "clustered vs. spread" partly measures *how the gene was sampled*, and heavy sampling at a known hotspot manufactures the appearance of clustering.
+
+The model never sees a "well-studied" label. But because these numbers are computed from the set of variants doctors happened to report, the study bias is baked into the inputs before the model looks at them. The model then learns "clustered + many variants → GOF" — partly real biology, partly "this gene was studied to death at its famous spot." This is what result_20's fixed, evenly-spaced scan is designed to break: every gene gets the same number of positions at the same spacing, so neither the variant count nor the clustering can carry study bias.
+
 ---
 
 ## Interpretation

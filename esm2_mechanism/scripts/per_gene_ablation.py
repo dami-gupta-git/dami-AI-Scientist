@@ -54,6 +54,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from utils_probes import (
+    family_split_indices, compute_metrics, aggregate_folds, align_proba,
+)
 import functools
 print = functools.partial(print, flush=True)
 
@@ -155,52 +158,6 @@ def load_all():
             gene_level, X_prot_gene, prot_matrix, gene_to_row, feature_names)
 
 
-# ---------------------------------------------------------------------------
-# Family-split indices
-# ---------------------------------------------------------------------------
-def family_split_indices(groups: np.ndarray, n_folds: int, seed: int):
-    rng = np.random.RandomState(seed)
-    unique_fams = np.array(sorted(f for f in set(groups.tolist()) if f is not None))
-    rng.shuffle(unique_fams)
-    fam_fold = {f: i % n_folds for i, f in enumerate(unique_fams)}
-    # Genes/variants with no family: distribute evenly
-    none_positions = [i for i, g in enumerate(groups) if g is None]
-    rng.shuffle(none_positions)
-    none_fold = {pos: i % n_folds for i, pos in enumerate(none_positions)}
-
-    fold_of = np.array([
-        fam_fold[g] if g is not None else none_fold.get(i, 0)
-        for i, g in enumerate(groups)
-    ])
-    for k in range(n_folds):
-        test = np.where(fold_of == k)[0]
-        train = np.where(fold_of != k)[0]
-        yield train, test
-
-
-# ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
-def compute_metrics(y_true, y_pred, y_proba) -> dict:
-    macro_f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
-    auroc = {}
-    for i, cls in enumerate(CLASSES):
-        yb = (y_true == i).astype(int)
-        if 0 < yb.sum() < len(yb):
-            auroc[cls] = float(roc_auc_score(yb, y_proba[:, i]))
-        else:
-            auroc[cls] = None
-    return {"macro_f1": macro_f1, "auroc": auroc}
-
-
-def agg(fold_list: list[dict]) -> dict:
-    f1s = [f["macro_f1"] for f in fold_list]
-    out = {"macro_f1_mean": float(np.mean(f1s)), "macro_f1_std": float(np.std(f1s))}
-    for cls in CLASSES:
-        vals = [f["auroc"].get(cls) for f in fold_list if f["auroc"].get(cls) is not None]
-        out[f"auroc_{cls}_mean"] = float(np.mean(vals)) if vals else None
-        out[f"auroc_{cls}_std"] = float(np.std(vals)) if vals else None
-    return out
 
 
 # ---------------------------------------------------------------------------
@@ -338,13 +295,13 @@ def run_per_gene_cv(
 
             # V1
             X_g_d = sc1.transform(delta_f[gene_var_idx])
-            pr1_g = _align_proba(mlp1.predict_proba(X_g_d), mlp1.classes_).mean(0)
+            pr1_g = align_proba(mlp1.predict_proba(X_g_d), mlp1.classes_, len(CLASSES)).mean(0)
             pr_gene1.append(pr1_g)
             y_gene_pred1.append(pr1_g.argmax())
 
             # V3
             X_g_c = sc3.transform(X_concat_f[gene_var_idx])
-            pr3_g = _align_proba(mlp3.predict_proba(X_g_c), mlp3.classes_).mean(0)
+            pr3_g = align_proba(mlp3.predict_proba(X_g_c), mlp3.classes_, len(CLASSES)).mean(0)
             pr_gene3.append(pr3_g)
             y_gene_pred3.append(pr3_g.argmax())
 
@@ -366,18 +323,10 @@ def run_per_gene_cv(
               f"V3={v3_folds[-1]['macro_f1']:.3f}")
 
     return {
-        "V1_per_gene": agg(v1_folds) if v1_folds else {},
-        "V2_per_gene": agg(v2_folds) if v2_folds else {},
-        "V3_per_gene": agg(v3_folds) if v3_folds else {},
+        "V1_per_gene": aggregate_folds(v1_folds) if v1_folds else {},
+        "V2_per_gene": aggregate_folds(v2_folds) if v2_folds else {},
+        "V3_per_gene": aggregate_folds(v3_folds) if v3_folds else {},
     }
-
-
-def _align_proba(proba: np.ndarray, classes: np.ndarray) -> np.ndarray:
-    aligned = np.zeros((len(proba), len(CLASSES)), dtype=np.float32)
-    for ci, c in enumerate(classes):
-        if c < len(CLASSES):
-            aligned[:, c] = proba[:, ci]
-    return aligned
 
 
 # ---------------------------------------------------------------------------
@@ -404,13 +353,11 @@ def run_v2_ablation(
             lr = LogisticRegression(max_iter=2000, class_weight="balanced",
                                     random_state=seed)
             lr.fit(sc.transform(X_tr), y_tr)
-            pr = lr.predict_proba(sc.transform(X_te))
-            pr_al = np.zeros((len(te), len(CLASSES)))
-            for ci, c in enumerate(lr.classes_):
-                pr_al[:, c] = pr[:, ci]
+            pr_al = align_proba(lr.predict_proba(sc.transform(X_te)),
+                                lr.classes_, len(CLASSES))
             pd_ = pr_al.argmax(axis=1)
             folds.append(compute_metrics(y_te, pd_, pr_al))
-        return agg(folds) if folds else {"macro_f1_mean": float("nan")}
+        return aggregate_folds(folds) if folds else {"macro_f1_mean": float("nan")}
 
     full_result = run_logreg_cv(X_prot_gene, y_gene, groups_gene)
     full_f1 = full_result["macro_f1_mean"]
