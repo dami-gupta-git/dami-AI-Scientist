@@ -19,6 +19,8 @@ import csv
 import json
 import os
 from collections import Counter
+import functools
+print = functools.partial(print, flush=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", default="../data")

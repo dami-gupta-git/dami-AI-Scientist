@@ -40,6 +40,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
+import functools
+print = functools.partial(print, flush=True)
 
 warnings.filterwarnings("ignore")
 

@@ -34,6 +34,8 @@ from sklearn.metrics import roc_auc_score, f1_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.neighbors import KNeighborsClassifier
+import functools
+print = functools.partial(print, flush=True)
 
 warnings.filterwarnings("ignore")
 

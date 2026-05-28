@@ -29,6 +29,8 @@ from scipy.spatial.distance import cdist
 from scipy.stats import pearsonr
 
 from experiment import (
+import functools
+print = functools.partial(print, flush=True)
     fetch_gerasimavicius_dataset,
     build_sequence_cache,
     window_sequence,

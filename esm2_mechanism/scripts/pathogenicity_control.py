@@ -39,6 +39,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, f1_score, precision_recall_curve, auc
 
 from experiment import (
+import functools
+print = functools.partial(print, flush=True)
     build_sequence_cache,
     fetch_pfam_families,
     fetch_gerasimavicius_dataset,

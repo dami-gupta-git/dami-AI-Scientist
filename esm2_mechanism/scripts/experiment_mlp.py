@@ -21,6 +21,8 @@ import warnings
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score
 from sklearn.preprocessing import LabelEncoder
+import functools
+print = functools.partial(print, flush=True)
 
 warnings.filterwarnings("ignore")
 

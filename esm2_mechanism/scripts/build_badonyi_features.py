@@ -15,6 +15,8 @@ import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import functools
+print = functools.partial(print, flush=True)
 
 ROOT = Path(__file__).parent.parent
 DATA = ROOT / "data"

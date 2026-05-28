@@ -9,6 +9,8 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import functools
+print = functools.partial(print, flush=True)
 
 
 def load_results(run_dir):

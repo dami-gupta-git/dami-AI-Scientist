@@ -26,6 +26,8 @@ import os
 import sys
 import numpy as np
 from collections import defaultdict
+import functools
+print = functools.partial(print, flush=True)
 
 # ── paths ────────────────────────────────────────────────────────────────────
 

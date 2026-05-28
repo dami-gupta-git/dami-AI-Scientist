@@ -34,6 +34,8 @@ from experiment import (
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, f1_score, precision_recall_curve, auc
+import functools
+print = functools.partial(print, flush=True)
 
 
 AA_ORDER = list("ACDEFGHIKLMNPQRSTVWY")

@@ -19,6 +19,8 @@ os.makedirs(OUT, exist_ok=True)
 
 from experiment import window_sequence, apply_missense, get_esm2_embeddings_for_pairs, ESM2_MODEL_650M
 from multiseed_v1 import gene_split_cv, family_split_cv, run_logreg_binary, run_mlp_binary
+import functools
+print = functools.partial(print, flush=True)
 
 CANONICAL = os.path.join(DATA, "pathogenicity_valid_variants_canonical.json")
 WT_EMB  = os.path.join(EMB, "emb_wt_mean_path_canonical_n16576.npy")

@@ -35,6 +35,8 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+import functools
+print = functools.partial(print, flush=True)
 
 warnings.filterwarnings("ignore")
 

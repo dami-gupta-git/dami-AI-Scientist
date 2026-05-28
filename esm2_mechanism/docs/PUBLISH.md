@@ -32,6 +32,8 @@ Results 1–10 established the ESM-2 sequence-embedding story. Results 11–16 e
 | 15-AppB | MMseqs2-20 cluster-split: all result_15 conclusions hold (Δ ≤ 0.03 across all variants). Matches Saadat & Fellay 2025 protocol | ✓ |
 | 16 | Within-family LOGO CV: residual proteome F1=0.514 > raw proteome F1=0.484 > Badonyi residuals (=0.449=raw, no within-family variation). Homeodomains (n=30, F1=0.633) are the anchor example | ✓ (deterministic LOGO) |
 | 16-addendum | Badonyi's raw published model survives family-split holdout (ROBUST by pre-registered criterion) but shows per-gene training-set fit: LOF AUROC 0.625 (in-training) vs 0.472 (never-seen). Does not affect V_bad/V2+bad validity | ✓ |
+| 17 | AlphaMissense on the result_6 ClinVar set (n=16,334): overall AUROC 0.940, per-family AUROC mean 0.948 ± 0.046 across 182 Pfam families, 0% below 0.70. result_6 family-robustness generalises to the published predictor in clinical use. Caveat: ClinVar–AM training-logic overlap inflates absolute number; per-family *distribution* metric unaffected. ProteinGym replication pending | ✓ |
+| 18 | AlphaMissense on ProteinGym v1.3 human DMS assays (n=91): per-assay AUROC mean 0.721 ± 0.150, 32% below 0.70, 14% below 0.60. Tight ClinVar distribution does **not** transfer to physical DMS labels; the wider distribution is interpretable (Tsuboyama mini-protein stability assays are OOD; classic disease genes still hit ≥0.90). Reframes result_17 as a within-curation-distribution claim, not a general "VEPs are family-robust" claim | ✓ |
 
 ---
 

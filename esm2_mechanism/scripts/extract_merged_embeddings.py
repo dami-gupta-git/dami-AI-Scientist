@@ -112,6 +112,8 @@ if (os.path.exists(ckpt_wt) and os.path.exists(ckpt_valid)):
 
 # Extract embeddings
 import torch
+import functools
+print = functools.partial(print, flush=True)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {device}")
 

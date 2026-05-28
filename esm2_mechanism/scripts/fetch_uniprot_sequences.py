@@ -19,6 +19,8 @@ import urllib.request
 import urllib.parse
 from pathlib import Path
 from io import StringIO
+import functools
+print = functools.partial(print, flush=True)
 
 ROOT = Path(__file__).parent.parent
 CACHE = ROOT / "data" / "cache"

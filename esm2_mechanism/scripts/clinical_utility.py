@@ -49,6 +49,8 @@ from sklearn.metrics import (
 )
 from sklearn.utils import resample
 from sklearn.calibration import calibration_curve
+import functools
+print = functools.partial(print, flush=True)
 
 warnings.filterwarnings("ignore")
 

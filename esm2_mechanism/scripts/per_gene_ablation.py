@@ -54,6 +54,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+import functools
+print = functools.partial(print, flush=True)
 
 warnings.filterwarnings("ignore")
 

@@ -20,6 +20,8 @@ Outputs:
 import gzip, io, json, os, sys, urllib.request
 import numpy as np
 from collections import defaultdict
+import functools
+print = functools.partial(print, flush=True)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
