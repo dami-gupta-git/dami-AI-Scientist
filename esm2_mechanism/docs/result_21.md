@@ -36,7 +36,7 @@ Stability is the right counter-test: ΔΔG is measured in a test tube, no connec
 
 ### Relation to prior work
 
-Prior work has shown that ESM-2-based models fine-tuned on stability data generalise to held-out proteins [SPURS, ThermoMPNN]. Here we show that the **frozen pre-trained representation already contains family-transferable stability signal — but only nonlinearly accessible**. A linear probe loses 22% of AUROC under Pfam family-split (0.764 → 0.597); GBM retains it (0.750). This contrasts with mechanism, where nonlinear probes also fail under family-split (results 3/5/7) — suggesting the two tasks differ not in the complexity of their encoding but in whether the signal is entangled with family identity at all levels. Fine-tuned models implicitly learn the nonlinear structure; the frozen representation already has it, but requires a nonlinear readout to access it.
+Consistent with prior fine-tuned models [SPURS, THPLM], frozen ESM-2 deltas contain cross-family stability signal — recoverable with a nonlinear probe even without task-specific training. This contrasts sharply with mechanism, where nonlinear probes provide no benefit under family-split (results 3/5/7).
 
 ---
 
