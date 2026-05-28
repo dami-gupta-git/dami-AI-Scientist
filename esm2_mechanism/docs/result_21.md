@@ -52,26 +52,28 @@ The protein-holdout AUROC of 0.642 is meaningfully above chance (0.5) — ESM-2 
 
 Note: protein-holdout and cluster-holdout are identical here because MMseqs2 was unavailable on the pod and identity clustering was used (1 cluster per protein). With MMseqs2-20 clustering, the cluster-holdout might be marginally stricter. Given the S1724 dataset spans diverse folds (barnase, ubiquitin, tenascin, CI2, RNase H, etc.), most proteins are likely already in separate clusters.
 
-### Nonlinear probe (MLP 256→64→1) and Pfam family-split
+### Nonlinear probes (MLP, RF, GBM) and Pfam family-split
 
 Pfam families fetched via UniProt for all 27 S1724 proteins (26/27 assigned; ubiquitin has no Pfam entry, treated as singleton). 22 unique families — note 1BNI/1CUN/1IOB share PF00545 (barnase), 1FT8/1FTG share PF00062 (lysozyme), 1RIS/1RX4 share PF00042 (globin), 1STN/3BDC share PF00565 (nuclease).
 
-| Probe | CV scheme | Spearman ρ | AUROC |
-|---|---|---|---|
-| Ridge | Random | 0.546 ± 0.006 | 0.764 ± 0.008 |
-| Ridge | Protein-holdout | 0.280 ± 0.049 | 0.642 ± 0.023 |
-| Ridge | **Pfam family-split** | **0.193 ± 0.022** | **0.597 ± 0.015** |
-| MLP | Random | 0.716 ± 0.027 | 0.857 ± 0.008 |
-| MLP | Protein-holdout | 0.464 ± 0.110 | 0.736 ± 0.006 |
-| MLP | **Pfam family-split** | **0.426 ± 0.014** | **0.714 ± 0.015** |
+5 seeds × 5-fold CV. ± = std across seeds.
 
-Two findings:
+| Probe | Random ρ | Protein-holdout ρ | Pfam-split ρ | Δ (rnd→pfam) | Pfam AUROC |
+|---|---|---|---|---|---|
+| Ridge | 0.546 ± 0.006 | 0.280 ± 0.049 | 0.193 ± 0.022 | 0.353 | 0.597 ± 0.015 |
+| MLP (256→64) | 0.720 ± 0.012 | 0.476 ± 0.021 | 0.440 ± 0.029 | 0.281 | 0.727 ± 0.010 |
+| RF (100 trees) | 0.666 ± 0.005 | 0.461 ± 0.028 | 0.443 ± 0.032 | 0.223 | 0.735 ± 0.019 |
+| **GBM (100 trees)** | **0.704 ± 0.008** | **0.528 ± 0.013** | **0.489 ± 0.030** | **0.215** | **0.750 ± 0.020** |
 
-**F1 — MLP retains substantially more signal under family-split than Ridge.** Ridge family-split ρ = 0.193 (AUROC 0.597); MLP family-split ρ = 0.426 (AUROC 0.714). The MLP captures nonlinear patterns in the embedding that transfer better across Pfam families than the linear projection. This mirrors the mechanism result (results 3/5/7), but the outcome is different: for mechanism, the MLP lift evaporated under family-split (confirming leakage). For stability, the MLP lift *survives* family-split — the nonlinear signal is partly genuine cross-family biochemistry, not purely family-memorisation.
+Three findings:
 
-**F2 — Ridge collapses harder than MLP under family-split.** Ridge Δ (random → family) = 0.353 in ρ; MLP Δ = 0.290. The linear probe is more reliant on family-level patterns. This is consistent with the embedding having a nonlinear geometry where family-independent stability information is accessible to an MLP but not a linear model.
+**F1 — All nonlinear probes retain substantially more signal under family-split than Ridge.** Ridge Pfam AUROC = 0.597; MLP/RF/GBM range 0.727–0.750. The nonlinear probes access cross-family stability signal that is not linearly separable. This is the opposite of the mechanism result (results 3/5/7), where MLP lift evaporated under family-split — for stability, the lift survives.
 
-**Small-n caveat applies here too.** 22 Pfam families driving 5-fold CV means each fold holds out ~4–5 families. The estimate is noisier than the mechanism family-split (which runs over 658 Pfam families). The direction is clear but the exact numbers should be read with this in mind.
+**F2 — GBM is the best probe under family-split.** GBM achieves Pfam ρ = 0.489, AUROC = 0.750, with the smallest Δ = 0.215. RF is close (ρ = 0.443, AUROC = 0.735, Δ = 0.223). Tree-based methods generalise better across families than MLP or Ridge, likely because they capture local interaction structure in the embedding without overfitting to family-level mean shifts.
+
+**F3 — The "stability is family-dependent" verdict needs qualification.** GBM Pfam AUROC = 0.750 is only 0.014 below Ridge random-split AUROC (0.764). With the right probe, the family-holdout performance is nearly as good as Ridge's in-distribution performance. The story is now: stability signal in ESM-2 embeddings is **nonlinearly accessible and substantially cross-family transferable** — Ridge undersells this because it can only use the linear component, which is more family-dependent. The gradient (pathogenicity robust → stability partially dependent → mechanism mostly dependent) holds, but the stability position on that gradient is closer to robust than the Ridge-only result suggested.
+
+**Small-n caveat.** 22 Pfam families, 5-fold CV — each fold holds out ~4–5 families. Noisier than the mechanism family-split (658 families). Direction is clear; exact magnitudes should be read with this in mind.
 
 ### Per-residue delta (delta_pos)
 

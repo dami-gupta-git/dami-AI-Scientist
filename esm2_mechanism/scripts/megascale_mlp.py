@@ -24,13 +24,25 @@ import numpy as np
 from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from megascale_stability import (
     load_s1724_variants, assign_protein_clusters,
     random_split_cv, protein_split_cv, cluster_split_cv,
     per_protein_spearman,
+
 )
+
+PFAM = {
+    '1AJ3': 'PF13499', '1BNI': 'PF00545', '1CEY': 'PF00072', '1CUN': 'PF00545',
+    '1DIV': 'PF04563', '1EKG': 'PF02234', '1FKJ': 'PF00254', '1FT8': 'PF00062',
+    '1FTG': 'PF00062', '1GUA': 'PF00244', '1H7M': 'PF00084', '1IOB': 'PF00545',
+    '1LVE': 'PF00089', '1O6X': 'PF02885', '1RIS': 'PF00042', '1RX4': 'PF00042',
+    '1SHF': 'PF00130', '1STN': 'PF00565', '1TEN': 'PF07679', '1TTG': 'PF09289',
+    '1UBQ': 'NO_PFAM', '2CI2': 'PF00280', '2IFB': 'PF14651', '2PTL': 'PF00020',
+    '3BDC': 'PF00565', '3HHR': 'PF00103', '4HXJ': 'PF00870'
+}
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
@@ -44,6 +56,53 @@ N_SEEDS = 5
 N_FOLDS = 5
 
 os.makedirs(OUT, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Pfam family-split CV
+# ---------------------------------------------------------------------------
+
+def pfam_split_cv(proteins, n_folds=5, seed=42):
+    pfam_arr = np.array([PFAM.get(p, p) for p in proteins])
+    fams = np.array(sorted(set(pfam_arr)))
+    np.random.RandomState(seed).shuffle(fams)
+    splits = []
+    for fold_fams in np.array_split(fams, n_folds):
+        fs = set(fold_fams)
+        tr = np.where(~np.isin(pfam_arr, list(fs)))[0]
+        te = np.where( np.isin(pfam_arr, list(fs)))[0]
+        if len(tr) >= 10 and len(te) >= 5:
+            splits.append((tr, te))
+    return splits
+
+
+# ---------------------------------------------------------------------------
+# Generic sklearn regression probe (Ridge, RF, GBM)
+# ---------------------------------------------------------------------------
+
+def run_sklearn_probe(X, y, splits, clf_fn):
+    rhos, aurocs = [], []
+    for tr, te in splits:
+        sc = StandardScaler()
+        Xtr = sc.fit_transform(X[tr])
+        Xte = sc.transform(X[te])
+        clf = clf_fn()
+        clf.fit(Xtr, y[tr])
+        pred = clf.predict(Xte)
+        rho, _ = spearmanr(y[te], pred)
+        binary = (y[te] >= np.median(y[te])).astype(int)
+        au = float(roc_auc_score(binary, pred)) if binary.sum() > 0 and (1-binary).sum() > 0 else float("nan")
+        rhos.append(float(rho))
+        aurocs.append(au)
+    if not rhos:
+        return {}
+    return {
+        "spearman_mean": float(np.mean(rhos)),
+        "spearman_std":  float(np.std(rhos)),
+        "auroc_mean":    float(np.nanmean(aurocs)),
+        "auroc_std":     float(np.nanstd(aurocs)),
+        "n_folds": len(rhos),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -152,86 +211,83 @@ def main():
 
     wt_mean  = np.load(WT_MEAN_EMB)
     mut_mean = np.load(MUT_MEAN_EMB)
-    delta_mean = mut_mean - wt_mean
-    print(f"Embeddings: {delta_mean.shape}")
+    X = mut_mean - wt_mean
+    print(f"Embeddings: {X.shape}")
 
-    results_by_seed = []
-    for seed in range(N_SEEDS):
-        print(f"\n── Seed {seed} ──")
-        splits_random  = random_split_cv(len(variants), N_FOLDS, seed)
-        splits_protein = protein_split_cv(proteins, N_FOLDS, seed)
-        splits_cluster = cluster_split_cv(proteins, cluster_map, N_FOLDS, seed)
-
-        seed_result = {"seed": seed}
-        for split_name, splits in [
-            ("random",  splits_random),
-            ("protein", splits_protein),
-            ("cluster", splits_cluster),
-        ]:
-            res = run_mlp_regression(delta_mean, ddg, splits, seed=seed)
-            seed_result[split_name] = res
-            if res:
-                print(f"  {split_name}: ρ={res['spearman_mean']:.3f}±{res['spearman_std']:.3f}  "
-                      f"AUROC={res['auroc_mean']:.3f}")
-        results_by_seed.append(seed_result)
-
-    # per-protein leave-one-out
-    print("\nPer-protein Spearman (leave-one-out, MLP)...")
-    per_prot_mlp = {}
-    for prot in sorted(set(proteins)):
-        mask = (proteins == prot)
-        if mask.sum() < 5:
-            continue
-        tr = np.where(~mask)[0]
-        te = np.where(mask)[0]
-        if len(tr) < 10:
-            continue
-        splits_loo = [(tr, te)]
-        res = run_mlp_regression(delta_mean, ddg, splits_loo, seed=0)
-        if res:
-            per_prot_mlp[prot] = {"spearman": res["spearman_mean"], "n_variants": int(mask.sum())}
-
-    prot_rhos = [v["spearman"] for v in per_prot_mlp.values()]
-    print(f"  mean={np.mean(prot_rhos):.3f}  std={np.std(prot_rhos):.3f}  "
-          f"min={min(prot_rhos):.3f}  max={max(prot_rhos):.3f}  n={len(prot_rhos)}")
-
-    # aggregate
-    summary = {}
-    for split_name in ["random", "protein", "cluster"]:
-        vals_rho   = [sr[split_name]["spearman_mean"] for sr in results_by_seed if sr.get(split_name)]
-        vals_auroc = [sr[split_name]["auroc_mean"]    for sr in results_by_seed if sr.get(split_name)]
-        summary[f"mlp_{split_name}"] = {
-            "spearman_mean": float(np.mean(vals_rho)),
-            "spearman_std":  float(np.std(vals_rho)),
-            "auroc_mean":    float(np.nanmean(vals_auroc)),
-            "auroc_std":     float(np.nanstd(vals_auroc)),
-        }
-
-    summary["mlp_per_protein"] = {
-        "spearman_mean": float(np.mean(prot_rhos)),
-        "spearman_std":  float(np.std(prot_rhos)),
-        "n_proteins": len(prot_rhos),
+    probes = {
+        "MLP":  lambda seed: (lambda: None),  # handled separately below
+        "RF":   lambda seed: RandomForestRegressor(n_estimators=100, random_state=seed, n_jobs=-1),
+        "GBM":  lambda seed: GradientBoostingRegressor(n_estimators=100, random_state=seed),
     }
 
-    # comparison table
-    print(f"\n{'='*60}")
-    print("MLP vs Ridge comparison (delta_mean):")
-    print(f"  {'':20s}  {'random ρ':>10}  {'protein ρ':>10}  {'Δ':>8}  {'random AUROC':>13}  {'protein AUROC':>14}")
-    for label, rnd_rho, prot_rho, rnd_au, prot_au in [
-        ("Ridge (result_21)", 0.546, 0.280, 0.764, 0.642),
-        ("MLP",
-         summary["mlp_random"]["spearman_mean"],
-         summary["mlp_protein"]["spearman_mean"],
-         summary["mlp_random"]["auroc_mean"],
-         summary["mlp_protein"]["auroc_mean"]),
+    summary = {}
+
+    # MLP: multi-seed via run_mlp_regression
+    print("\n── MLP ──")
+    for split_name, splits_fn in [
+        ("random",  lambda s: random_split_cv(len(variants), N_FOLDS, s)),
+        ("protein", lambda s: protein_split_cv(proteins, N_FOLDS, s)),
+        ("pfam",    lambda s: pfam_split_cv(proteins, N_FOLDS, s)),
     ]:
-        print(f"  {label:20s}  {rnd_rho:>10.3f}  {prot_rho:>10.3f}  {rnd_rho-prot_rho:>8.3f}  {rnd_au:>13.3f}  {prot_au:>14.3f}")
-    print(f"{'='*60}")
+        rhos, aurocs = [], []
+        for seed in range(N_SEEDS):
+            res = run_mlp_regression(X, ddg, splits_fn(seed), seed=seed)
+            if res:
+                rhos.append(res["spearman_mean"])
+                aurocs.append(res["auroc_mean"])
+        key = f"mlp_{split_name}"
+        summary[key] = {
+            "spearman_mean": float(np.mean(rhos)),
+            "spearman_std":  float(np.std(rhos)),
+            "auroc_mean":    float(np.nanmean(aurocs)),
+            "auroc_std":     float(np.nanstd(aurocs)),
+        }
+        print(f"  {split_name:8s}: ρ={summary[key]['spearman_mean']:.3f}±{summary[key]['spearman_std']:.3f}  "
+              f"AUROC={summary[key]['auroc_mean']:.3f}±{summary[key]['auroc_std']:.3f}")
+
+    # RF and GBM: use sklearn probe
+    for probe_name, clf_factory in [
+        ("RF",  lambda seed: RandomForestRegressor(n_estimators=100, random_state=seed, n_jobs=-1)),
+        ("GBM", lambda seed: GradientBoostingRegressor(n_estimators=100, random_state=seed)),
+    ]:
+        print(f"\n── {probe_name} ──")
+        for split_name, splits_fn in [
+            ("random",  lambda s: random_split_cv(len(variants), N_FOLDS, s)),
+            ("protein", lambda s: protein_split_cv(proteins, N_FOLDS, s)),
+            ("pfam",    lambda s: pfam_split_cv(proteins, N_FOLDS, s)),
+        ]:
+            rhos, aurocs = [], []
+            for seed in range(N_SEEDS):
+                res = run_sklearn_probe(X, ddg, splits_fn(seed),
+                                        clf_fn=lambda s=seed: clf_factory(s))
+                if res:
+                    rhos.append(res["spearman_mean"])
+                    aurocs.append(res["auroc_mean"])
+            key = f"{probe_name.lower()}_{split_name}"
+            summary[key] = {
+                "spearman_mean": float(np.mean(rhos)),
+                "spearman_std":  float(np.std(rhos)),
+                "auroc_mean":    float(np.nanmean(aurocs)),
+                "auroc_std":     float(np.nanstd(aurocs)),
+            }
+            print(f"  {split_name:8s}: ρ={summary[key]['spearman_mean']:.3f}±{summary[key]['spearman_std']:.3f}  "
+                  f"AUROC={summary[key]['auroc_mean']:.3f}±{summary[key]['auroc_std']:.3f}")
+
+    # Final comparison table
+    print(f"\n{'='*70}")
+    print(f"{'Probe':6s}  {'Random ρ':>9}  {'Protein ρ':>10}  {'Pfam ρ':>7}  {'Δ rnd→pfam':>10}  {'Pfam AUROC':>11}")
+    for probe in ["ridge", "mlp", "rf", "gbm"]:
+        rnd = summary.get(f"{probe}_random",  {}).get("spearman_mean", float("nan"))
+        prt = summary.get(f"{probe}_protein", {}).get("spearman_mean", float("nan"))
+        pfm = summary.get(f"{probe}_pfam",    {}).get("spearman_mean", float("nan"))
+        pau = summary.get(f"{probe}_pfam",    {}).get("auroc_mean",    float("nan"))
+        if probe == "ridge":
+            rnd, prt, pfm, pau = 0.546, 0.280, 0.193, 0.597
+        print(f"  {probe.upper():6s}  {rnd:>9.3f}  {prt:>10.3f}  {pfm:>7.3f}  {rnd-pfm:>10.3f}  {pau:>11.3f}")
+    print(f"{'='*70}")
 
     with open(os.path.join(OUT, "mlp_summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
-    with open(os.path.join(OUT, "mlp_per_protein_spearman.json"), "w") as f:
-        json.dump(per_prot_mlp, f, indent=2)
     print(f"\nResults written to {OUT}/")
 
 
