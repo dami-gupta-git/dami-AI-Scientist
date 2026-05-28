@@ -52,6 +52,27 @@ The protein-holdout AUROC of 0.642 is meaningfully above chance (0.5) — ESM-2 
 
 Note: protein-holdout and cluster-holdout are identical here because MMseqs2 was unavailable on the pod and identity clustering was used (1 cluster per protein). With MMseqs2-20 clustering, the cluster-holdout might be marginally stricter. Given the S1724 dataset spans diverse folds (barnase, ubiquitin, tenascin, CI2, RNase H, etc.), most proteins are likely already in separate clusters.
 
+### Nonlinear probe (MLP 256→64→1) and Pfam family-split
+
+Pfam families fetched via UniProt for all 27 S1724 proteins (26/27 assigned; ubiquitin has no Pfam entry, treated as singleton). 22 unique families — note 1BNI/1CUN/1IOB share PF00545 (barnase), 1FT8/1FTG share PF00062 (lysozyme), 1RIS/1RX4 share PF00042 (globin), 1STN/3BDC share PF00565 (nuclease).
+
+| Probe | CV scheme | Spearman ρ | AUROC |
+|---|---|---|---|
+| Ridge | Random | 0.546 ± 0.006 | 0.764 ± 0.008 |
+| Ridge | Protein-holdout | 0.280 ± 0.049 | 0.642 ± 0.023 |
+| Ridge | **Pfam family-split** | **0.193 ± 0.022** | **0.597 ± 0.015** |
+| MLP | Random | 0.716 ± 0.027 | 0.857 ± 0.008 |
+| MLP | Protein-holdout | 0.464 ± 0.110 | 0.736 ± 0.006 |
+| MLP | **Pfam family-split** | **0.426 ± 0.014** | **0.714 ± 0.015** |
+
+Two findings:
+
+**F1 — MLP retains substantially more signal under family-split than Ridge.** Ridge family-split ρ = 0.193 (AUROC 0.597); MLP family-split ρ = 0.426 (AUROC 0.714). The MLP captures nonlinear patterns in the embedding that transfer better across Pfam families than the linear projection. This mirrors the mechanism result (results 3/5/7), but the outcome is different: for mechanism, the MLP lift evaporated under family-split (confirming leakage). For stability, the MLP lift *survives* family-split — the nonlinear signal is partly genuine cross-family biochemistry, not purely family-memorisation.
+
+**F2 — Ridge collapses harder than MLP under family-split.** Ridge Δ (random → family) = 0.353 in ρ; MLP Δ = 0.290. The linear probe is more reliant on family-level patterns. This is consistent with the embedding having a nonlinear geometry where family-independent stability information is accessible to an MLP but not a linear model.
+
+**Small-n caveat applies here too.** 22 Pfam families driving 5-fold CV means each fold holds out ~4–5 families. The estimate is noisier than the mechanism family-split (which runs over 658 Pfam families). The direction is clear but the exact numbers should be read with this in mind.
+
 ### Per-residue delta (delta_pos)
 
 | CV scheme | Spearman ρ | AUROC |
