@@ -1,21 +1,31 @@
 """
-Megascale stability as a second ESM-2 positive control.
+Megascale stability as a second ESM-2 positive control (result_21).
 
-Tests whether ESM-2 delta embeddings predict ΔΔG (thermodynamic stability)
-under random / protein / family-split CV, using the S1724 benchmark
-(1,422 single-point missense mutations across 33 proteins).
+Dataset: S1724 benchmark (ThermoMutDB curated, 1,277 single-point missense
+across 27 real PDB proteins). Physical ΔΔG labels — no curation circularity.
+NOT the synthetic mini-protein portion of Megascale; all 27 proteins are
+natural domains with Pfam coverage.
 
-Pre-registered hypotheses:
+Pre-registered hypotheses (plan_megascale_stability.md):
   H1: Spearman ρ ≥ 0.5 under random split (stability encoded)
-  H2: ρ drops ≤ 0.05 under protein/family-split (family-robust)
-  H3: Per-protein Spearman std ≤ 0.10 (tight distribution)
+  H2: ρ drops ≤ 0.05 under protein-holdout CV (family-robust)
+  H3: Stability projected out of mechanism delta_mean does not lift
+      family-split mechanism F1 on merged Gerasimavicius dataset.
+      Protocol: train Ridge on S1724 → predict stability score for merged
+      variants → compute residuals of delta_mean ⊥ predicted stability
+      (OLS projection-out, one component) → re-run family-split logreg.
+  H4: Per-protein ρ std ≤ 0.10 (tight per-stratum distribution)
 
-Decision table (plan_megascale_stability.md):
-  ROBUST: random ρ ≥ 0.5, protein-split Δ ≤ 0.05, per-protein std ≤ 0.10
-  WEAK:   random ρ 0.3–0.5
-  HETEROGENEOUS: ρ ≥ 0.5, Δ ≤ 0.05, std ≥ 0.15
-  LEAKY:  ρ ≥ 0.5, protein-split Δ ≥ 0.10
-  NULL:   ρ < 0.3
+Decision table — ordered by informativeness, not by prior probability.
+LEAKY and HETEROGENEOUS are the high-value outcomes; ROBUST is expected:
+
+  LEAKY:         random ρ ≥ 0.5, protein-split Δ ≥ 0.10  → stability signal partly family-memorisation;
+                 analogous to mechanism leakage; would reshape central claim
+  HETEROGENEOUS: random ρ ≥ 0.5, Δ ≤ 0.05, per-prot std ≥ 0.15  → works on average, fails on some proteins;
+                 matches result_18 AM/ProteinGym pattern; curation vs physical label distinction is real
+  ROBUST:        random ρ ≥ 0.5, Δ ≤ 0.05, per-prot std ≤ 0.10  → expected; strengthens positive-control claim
+  WEAK:          random ρ 0.3–0.5  → partial signal
+  NULL:          random ρ < 0.3  → very unexpected; would undermine central framing
 
 Usage (GPU required for embedding extraction):
   cd esm2_mechanism
@@ -23,12 +33,10 @@ Usage (GPU required for embedding extraction):
 
 Outputs:
   data/megascale_variants.json
-  data/embeddings/megascale_wt_mean.npy
-  data/embeddings/megascale_mut_mean.npy
-  data/embeddings/megascale_wt_pos.npy
-  data/embeddings/megascale_mut_pos.npy
+  data/embeddings/megascale_{wt,mut}_{mean,pos}.npy
   results/megascale_stability/summary.json
   results/megascale_stability/per_protein_spearman.json
+  results/megascale_stability/h3_stability_projection.json
 """
 
 import json
@@ -388,14 +396,89 @@ def per_protein_spearman(X, y, proteins, use_delta_mean=True):
 
 
 # ---------------------------------------------------------------------------
-# Decision rule
+# H3: stability projection out of mechanism
+# ---------------------------------------------------------------------------
+
+def run_h3_stability_projection(merged_delta_mean, merged_labels, merged_proteins,
+                                  pfam_map, s1724_variants, s1724_delta_mean, s1724_ddg,
+                                  n_folds=5, n_seeds=5):
+    """
+    Pre-registered H3 protocol:
+      1. Train Ridge on S1724 (wt_mean, mut_mean) -> ΔΔG.
+      2. Use that Ridge to predict a stability score for each merged-dataset variant
+         from its delta_mean embedding.
+      3. Project stability score out of merged delta_mean via OLS (one component):
+         residuals = delta_mean - (delta_mean @ v) * v  where v is the unit vector
+         of the stability Ridge weights (normalised).
+      4. Re-run family-split logistic regression on residuals, 5 seeds.
+      5. Compare to baseline family-split F1 on raw delta_mean.
+
+    Returns dict with baseline_f1, projected_f1, delta_f1, and per-seed values.
+    """
+    from sklearn.linear_model import LogisticRegression, Ridge
+    from sklearn.preprocessing import StandardScaler, LabelEncoder
+    from sklearn.metrics import f1_score
+    from multiseed_v1 import family_split_cv
+
+    # Fit stability Ridge on S1724
+    sc_s = StandardScaler()
+    X_s = sc_s.fit_transform(s1724_delta_mean)
+    ridge = Ridge(alpha=1.0)
+    ridge.fit(X_s, s1724_ddg)
+
+    # Stability projection vector: unit-normalised Ridge weights
+    w = ridge.coef_  # shape (D,)
+    v = w / (np.linalg.norm(w) + 1e-12)  # unit vector in feature space
+
+    # Project stability out of merged delta_mean
+    # residuals_i = x_i - (x_i · v) * v  (remove the stability direction)
+    proj = merged_delta_mean @ v  # (N,) scalar stability score per variant
+    residuals = merged_delta_mean - np.outer(proj, v)
+
+    le = LabelEncoder()
+    y = le.fit_transform(merged_labels)
+
+    baseline_f1s, projected_f1s = [], []
+    for seed in range(n_seeds):
+        splits = family_split_cv(merged_proteins, pfam_map, n_folds=n_folds, seed=seed)
+        for X, tag in [(merged_delta_mean, "baseline"), (residuals, "projected")]:
+            fold_f1s = []
+            for tr, te in splits:
+                sc = StandardScaler()
+                Xtr = sc.fit_transform(X[tr].astype(np.float32))
+                Xte = sc.transform(X[te].astype(np.float32))
+                clf = LogisticRegression(max_iter=1000, C=1.0, class_weight="balanced",
+                                         multi_class="multinomial", random_state=seed)
+                clf.fit(Xtr, y[tr])
+                pred = clf.predict(Xte)
+                fold_f1s.append(float(f1_score(y[te], pred, average="macro", zero_division=0)))
+            if tag == "baseline":
+                baseline_f1s.append(float(np.mean(fold_f1s)))
+            else:
+                projected_f1s.append(float(np.mean(fold_f1s)))
+
+    return {
+        "baseline_f1_mean":  float(np.mean(baseline_f1s)),
+        "baseline_f1_std":   float(np.std(baseline_f1s)),
+        "projected_f1_mean": float(np.mean(projected_f1s)),
+        "projected_f1_std":  float(np.std(projected_f1s)),
+        "delta_f1":          float(np.mean(projected_f1s) - np.mean(baseline_f1s)),
+        "h3_passes":         float(np.mean(projected_f1s)) <= float(np.mean(baseline_f1s)) + 0.01,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Decision rule — ordered by informativeness
 # ---------------------------------------------------------------------------
 
 def apply_decision_rule(random_rho, protein_rho, per_prot_std):
-    if random_rho < 0.3:
-        return "NULL"
+    """
+    Ordered by informativeness (most surprising first), not by prior probability.
+    ROBUST is the expected outcome; LEAKY and HETEROGENEOUS are the high-value findings.
+    """
     delta = random_rho - protein_rho
-    if delta >= 0.10:
+    # Check in order of informativeness
+    if random_rho >= 0.5 and delta >= 0.10:
         return "LEAKY"
     if random_rho >= 0.5 and delta <= 0.05 and per_prot_std >= 0.15:
         return "HETEROGENEOUS"
@@ -403,6 +486,8 @@ def apply_decision_rule(random_rho, protein_rho, per_prot_std):
         return "ROBUST"
     if 0.3 <= random_rho < 0.5:
         return "WEAK"
+    if random_rho < 0.3:
+        return "NULL"
     return f"INTERMEDIATE (rho={random_rho:.3f}, delta={delta:.3f}, std={per_prot_std:.3f})"
 
 
@@ -505,7 +590,48 @@ def main():
         "n_proteins":    len(prot_rhos),
     }
 
-    # ── 7. Decision rule ──────────────────────────────────────────────────────
+    # ── 7. H3 — stability projection out of mechanism ─────────────────────────
+    h3_result = None
+    merged_variants_path = os.path.join(DATA, "merged_valid_variants.json")
+    merged_wt_path  = os.path.join(EMB, "merged_embeddings_wt_mean.npy")
+    merged_mut_path = os.path.join(EMB, "merged_embeddings_mut_mean.npy")
+    if all(os.path.exists(p) for p in [merged_variants_path, merged_wt_path, merged_mut_path,
+                                        PFAM_JSON]):
+        print("\nRunning H3 stability projection test...")
+        with open(merged_variants_path) as f:
+            merged_variants = json.load(f)
+        with open(PFAM_JSON) as f:
+            pfam_map = json.load(f)
+        merged_wt  = np.load(merged_wt_path)
+        merged_mut = np.load(merged_mut_path)
+        merged_delta = merged_mut - merged_wt
+
+        label_map = {"GOF": "GOF", "DN": "DN", "HI": "LOF", "AR": "LOF", "LOF": "LOF"}
+        merged_labels   = np.array([label_map.get(v.get("mechanism", v.get("label", "")), "LOF")
+                                     for v in merged_variants])
+        merged_proteins = np.array([v.get("gene", v.get("protein", "")) for v in merged_variants])
+
+        # Align lengths: merged embeddings may differ from variant list if some were dropped
+        n_min = min(len(merged_delta), len(merged_labels))
+        merged_delta   = merged_delta[:n_min]
+        merged_labels  = merged_labels[:n_min]
+        merged_proteins = merged_proteins[:n_min]
+
+        h3_result = run_h3_stability_projection(
+            merged_delta, merged_labels, merged_proteins, pfam_map,
+            variants, delta_mean, ddg,
+            n_folds=N_FOLDS, n_seeds=N_SEEDS,
+        )
+        print(f"  H3: baseline F1={h3_result['baseline_f1_mean']:.3f}  "
+              f"projected F1={h3_result['projected_f1_mean']:.3f}  "
+              f"Δ={h3_result['delta_f1']:+.3f}  "
+              f"passes={'YES' if h3_result['h3_passes'] else 'NO (stability direction is informative)'}")
+        with open(os.path.join(OUT, "h3_stability_projection.json"), "w") as f:
+            json.dump(h3_result, f, indent=2)
+    else:
+        print("\nSkipping H3 (merged embeddings not found — run on pod with full data)")
+
+    # ── 8. Decision rule ──────────────────────────────────────────────────────
     dm_random  = summary.get("delta_mean_random",  {}).get("spearman_mean", float("nan"))
     dm_protein = summary.get("delta_mean_protein", {}).get("spearman_mean", float("nan"))
 
@@ -515,13 +641,17 @@ def main():
     summary["n_proteins"] = len(set(proteins))
     summary["n_clusters"] = n_clusters
     summary["n_seeds"] = N_SEEDS
+    summary["h3"] = h3_result
 
     print(f"\n{'='*60}")
-    print(f"VERDICT: {verdict}")
-    print(f"  delta_mean random ρ  : {dm_random:.3f}")
+    print(f"VERDICT: {verdict}  (ordered by informativeness: LEAKY > HETEROGENEOUS > ROBUST > WEAK > NULL)")
+    print(f"  delta_mean random ρ  : {dm_random:.3f}  (H1 threshold ≥ 0.5)")
     print(f"  delta_mean protein ρ : {dm_protein:.3f}")
-    print(f"  Δ (random − protein) : {dm_random - dm_protein:.3f}")
-    print(f"  per-protein ρ std    : {per_prot_std:.3f}")
+    print(f"  Δ (random − protein) : {dm_random - dm_protein:.3f}  (LEAKY if Δ ≥ 0.10)")
+    print(f"  per-protein ρ std    : {per_prot_std:.3f}  (HETEROGENEOUS if ≥ 0.15)")
+    if h3_result:
+        print(f"  H3 Δ mechanism F1    : {h3_result['delta_f1']:+.3f}  "
+              f"(passes if ≤ +0.01 — stability projection doesn't help mechanism)")
     print(f"{'='*60}")
 
     with open(os.path.join(OUT, "summary.json"), "w") as f:
