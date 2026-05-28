@@ -180,7 +180,14 @@ def extract_probe_embeddings(probes, seqs, batch_size=128):
         np.save(ckpt_wt,  np.vstack(all_wt))
         np.save(ckpt_mut, np.vstack(all_mut))
         ckpt_idx.write_text(str(n_done))
-        print(f"  Checkpoint: {n_done}/{len(probes)} probes done")
+        try:
+            import torch
+            mem_used = torch.cuda.memory_allocated() / 1e9
+            mem_res  = torch.cuda.memory_reserved() / 1e9
+            print(f"  Checkpoint: {n_done}/{len(probes)} probes done  "
+                  f"[GPU mem: {mem_used:.1f}GB alloc / {mem_res:.1f}GB reserved]", flush=True)
+        except Exception:
+            print(f"  Checkpoint: {n_done}/{len(probes)} probes done", flush=True)
 
     wt_final  = np.vstack(all_wt)
     mut_final = np.vstack(all_mut)
@@ -349,4 +356,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import traceback, signal
+
+    def _sig_handler(signum, frame):
+        print(f"\n[SIGNAL] Received signal {signum} — exiting", flush=True)
+        sys.exit(1)
+
+    signal.signal(signal.SIGTERM, _sig_handler)
+    signal.signal(signal.SIGHUP, _sig_handler)
+
+    try:
+        main()
+    except Exception:
+        print("\n[FATAL ERROR]", flush=True)
+        traceback.print_exc()
+        sys.exit(1)
