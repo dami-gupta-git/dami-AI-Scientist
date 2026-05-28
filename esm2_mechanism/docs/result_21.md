@@ -32,7 +32,11 @@ We asked: does ESM-2 encode thermodynamic stability — the physical consequence
 
 This is a second positive control for the paper. The first (result_6) showed ESM-2 predicts ClinVar pathogenicity with AUROC 0.886, family-robust. But a reviewer could object: ClinVar labels are curated using population frequency data that is not independent of ESM-2's evolutionary training signal. Pathogenicity robustness could be a curation-circularity artefact.
 
-Stability is the right counter-test: ΔΔG is measured in a test tube, no connection to clinical curation or evolutionary training. If ESM-2 encodes stability in a family-robust way, the biochemistry claim is strong. If stability is partially family-dependent — as mechanism is — we learn something more nuanced: ESM-2's family-transferable signal is specific to pathogenicity, not general to biochemistry.
+Stability is the right counter-test: ΔΔG is measured in a test tube, no connection to clinical curation or evolutionary training.
+
+### Relation to prior work
+
+Prior work has shown that ESM-2-based models fine-tuned on stability data generalise to held-out proteins [SPURS, ThermoMPNN]. Here we show that the **frozen pre-trained representation already contains family-transferable stability signal — but only nonlinearly accessible**. A linear probe loses 22% of AUROC under Pfam family-split (0.764 → 0.597); GBM retains it (0.750). This contrasts with mechanism, where nonlinear probes also fail under family-split (results 3/5/7) — suggesting the two tasks differ not in the complexity of their encoding but in whether the signal is entangled with family identity at all levels. Fine-tuned models implicitly learn the nonlinear structure; the frozen representation already has it, but requires a nonlinear readout to access it.
 
 ---
 
