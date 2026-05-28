@@ -35,6 +35,8 @@ Usage:
 """
 
 import argparse, json, os, sys, numpy as np
+import functools
+print = functools.partial(print, flush=True)
 from collections import defaultdict
 from pathlib import Path
 

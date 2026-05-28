@@ -26,9 +26,11 @@ import time
 import warnings
 import urllib.request
 import urllib.error
+import functools
 from io import StringIO
 
 import numpy as np
+print = functools.partial(print, flush=True)
 from scipy.stats import spearmanr
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, f1_score, precision_recall_curve, auc
