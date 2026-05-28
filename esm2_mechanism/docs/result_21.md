@@ -78,7 +78,17 @@ The wide distribution (std = 0.274) reflects genuine heterogeneity: some protein
 
 ### H3 — stability projection out of mechanism
 
-Not run (merged Gerasimavicius embeddings not present on pod). Protocol pre-specified: fit Ridge on S1724 → normalise weight vector → project that direction out of merged delta_mean → re-run family-split logreg. Can be run locally.
+**Run locally (merged embeddings + megascale embeddings both present).**
+
+Protocol: fit Ridge on S1724 delta_mean → ΔΔG → extract unit-normalised weight vector → project that direction out of merged delta_mean → re-run family-split logistic regression, 5 seeds × 5 folds.
+
+| | Family-split F1 (5-seed mean ± std) |
+|---|---|
+| Baseline (raw delta_mean) | 0.3715 ± 0.0057 |
+| Stability-projected residuals | 0.3720 ± 0.0059 |
+| Δ | **+0.0004** |
+
+**H3 passes.** Projecting out the stability direction makes no measurable difference (Δ = +0.0004, well within noise). The stability direction in ESM-2 embedding space is essentially orthogonal to whatever mechanism signal exists — removing it neither helps nor hurts. This rules out the hypothesis that "mechanism prediction fails because stability signal is drowning out mechanism signal." The two are independent problems in the embedding space.
 
 ---
 
